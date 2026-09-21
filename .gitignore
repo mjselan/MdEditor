@@ -1,0 +1,65 @@
+# Build trees (CMake presets use build/debug, build/release)
+build/
+out/
+cmake-build-*/
+
+# CMake generated
+CMakeCache.txt
+CMakeFiles/
+cmake_install.cmake
+install_manifest.txt
+CTestTestfile.cmake
+_deps/
+
+# Ninja
+.ninja_deps
+.ninja_log
+
+# Qt generated (AUTOMOC/UIC/RCC outputs live in build/, but cover strays)
+moc_*.cpp
+moc_*.h
+qrc_*.cpp
+ui_*.h
+*.qmake.stash
+*.pro.user*
+
+# MSVC / Visual Studio
+.vs/
+*.VC.db
+*.VC.VC.opendb
+*.user
+*.sln
+*.vcxproj*
+Debug/
+Release/
+x64/
+
+# Compiled output
+*.exe
+*.dll
+*.lib
+*.a
+*.so
+*.dylib
+*.o
+*.obj
+*.pdb
+*.ilk
+*.exp
+
+# Qt Creator / CLion
+*.creator.user*
+.idea/
+cmake-build*/
+
+# OS / editor
+Thumbs.db
+Desktop.ini
+.DS_Store
+*~
+*.swp
+*.orig
+*.rej
+
+# Local temp / scratch
+tmp/
