@@ -48,6 +48,7 @@ private slots:
     void spellCheckFlagsMisspellings();
     void spellCheckSkipsCodeSegments();
     void toolbarIconsRenderOnBothBackgrounds();
+    void applicationIconRendersAllSizes();
     void themeColorsPresent();
     void palettesDifferByMode();
 
@@ -407,6 +408,33 @@ void TestCore::toolbarIconsRenderOnBothBackgrounds()
                      qPrintable(QStringLiteral("icon %1 rendered empty").arg(i)));
         }
     }
+}
+
+void TestCore::applicationIconRendersAllSizes()
+{
+    // Every standard size paints something with the brand gradient present.
+    for (int size : { 16, 24, 32, 48, 64, 128, 256 }) {
+        const QImage img = appicons::applicationIconPixmap(size).toImage();
+        QCOMPARE(img.width(), size);
+        QCOMPARE(img.height(), size);
+        QVERIFY2(!img.allGray(), qPrintable(QStringLiteral("app icon %1 empty").arg(size)));
+
+        // Corner pixel is transparent (rounded badge); center-ish pixel is
+        // inside the indigo/purple badge.
+        QCOMPARE(img.pixelColor(0, 0).alpha(), 0);
+        // (size/8, size/8) is inside the badge interior for every size (the
+        // badge spans 0.75..23.25 on the 24-unit grid; fixed pixel offsets
+        // from the edges can land on the anti-aliased boundary).
+        const QColor mid = img.pixelColor(size / 8, size / 8);
+        QVERIFY2(mid.alpha() > 200,
+                 qPrintable(QStringLiteral("app icon %1 badge not opaque").arg(size)));
+        QVERIFY2(mid.blue() > mid.red(), // indigo/purple family: blue-dominant
+                 qPrintable(QStringLiteral("app icon %1 wrong badge color").arg(size)));
+    }
+
+    const QIcon icon = appicons::applicationIcon();
+    QVERIFY(!icon.isNull());
+    QVERIFY(icon.availableSizes().size() >= 5);
 }
 
 void TestCore::themeColorsPresent()

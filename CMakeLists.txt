@@ -49,6 +49,33 @@ target_link_libraries(markdowneditor PRIVATE
     Qt6::Widgets
     Qt6::PrintSupport)
 
+# --- Application icon (Windows shell embedding) ------------------------------
+# The icon artwork is painted in code (src/appicons.cpp). The makeico tool
+# renders it into resources/app.ico (classic uncompressed BMP entries), and the
+# .rc script embeds it into the exe. Regenerated at configure time when stale.
+if(WIN32)
+    add_executable(makeico tools/makeico/main.cpp src/appicons.cpp)
+    target_include_directories(makeico PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/src)
+    target_link_libraries(makeico PRIVATE Qt6::Gui)
+    set_target_properties(makeico PROPERTIES WIN32_EXECUTABLE OFF)
+
+    set(FREEBUFF_APP_RC "${CMAKE_CURRENT_SOURCE_DIR}/resources/app.rc")
+    set(FREEBUFF_APP_ICO "${CMAKE_CURRENT_SOURCE_DIR}/resources/app.ico")
+    add_custom_command(
+        OUTPUT "${FREEBUFF_APP_ICO}"
+        COMMAND ${CMAKE_COMMAND} -E env
+            "PATH=$<TARGET_FILE_DIR:Qt6::Core>\\;$ENV{PATH}"
+            $<TARGET_FILE:makeico> "${FREEBUFF_APP_ICO}"
+        DEPENDS makeico tools/makeico/main.cpp src/appicons.cpp src/appicons.h
+        COMMENT "Generating resources/app.ico")
+    add_custom_target(app_icon DEPENDS "${FREEBUFF_APP_ICO}")
+    add_dependencies(markdowneditor app_icon)
+
+    target_sources(markdowneditor PRIVATE "${FREEBUFF_APP_RC}")
+    set_source_files_properties("${FREEBUFF_APP_RC}" PROPERTIES
+        OBJECT_DEPENDS "${FREEBUFF_APP_ICO}")
+endif()
+
 # --- Optional spell check via KDE Frameworks Sonnet -------------------------
 # When Sonnet is not installed the editor builds and runs normally with
 # spell check disabled; no other functionality is affected.

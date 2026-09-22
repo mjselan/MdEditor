@@ -63,3 +63,6 @@ Desktop.ini
 
 # Local temp / scratch
 tmp/
+
+# Generated application icon (makeico tool; regenerate via the app_icon target)
+resources/app.ico

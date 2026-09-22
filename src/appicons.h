@@ -3,6 +3,7 @@
 #include <QColor>
 #include <QHash>
 #include <QIcon>
+#include <QPixmap>
 
 class QString;
 
@@ -36,6 +37,15 @@ enum class Icon {
     BulletList,
     NumberedList,
 };
+
+// The application brand icon: a rounded-square document page bearing a large
+// markdown "M" with a bold bar ("M▀" evoking the markdown logo) on a two-tone
+// gradient background. Rendered at 16-256 px; used for the window/taskbar icon
+// and for generating resources/app.ico.
+QIcon applicationIcon();
+
+// Renders one square pixmap of the application icon at the requested size.
+QPixmap applicationIconPixmap(int size);
 
 // Returns a multi-resolution icon rendered for the given background color
 // (used to derive the accent: dark background -> light glyph, and vice versa).

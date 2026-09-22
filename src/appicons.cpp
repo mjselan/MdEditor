@@ -305,4 +305,56 @@ QIcon iconFor(Icon which)
     return cache().value(key);
 }
 
+// --- application brand icon --------------------------------------------------
+
+QPixmap applicationIconPixmap(int size)
+{
+    QPixmap pm(size, size);
+    pm.fill(Qt::transparent);
+    QPainter p(&pm);
+    p.setRenderHint(QPainter::Antialiasing, true);
+    p.setRenderHint(QPainter::TextAntialiasing, true);
+
+    const qreal s = size / 24.0; // design on a 24x24 grid
+    p.scale(s, s);
+
+    // Rounded-square badge: indigo -> deep purple vertical gradient.
+    const QRectF badge(0.75, 0.75, 22.5, 22.5);
+    QLinearGradient grad(badge.topLeft(), badge.bottomLeft());
+    grad.setColorAt(0.0, QColor(0x53, 0x61, 0xe8)); // indigo
+    grad.setColorAt(1.0, QColor(0x7b, 0x3f, 0xd4)); // purple
+    p.setPen(Qt::NoPen);
+    p.setBrush(grad);
+    p.drawRoundedRect(badge, 5.0, 5.0);
+
+    // Down-arrow page fold (markdown's signature angle) across the badge.
+    QPen arrow(QColor(255, 255, 255, 235), 2.0);
+    arrow.setCapStyle(Qt::RoundCap);
+    arrow.setJoinStyle(Qt::RoundJoin);
+    p.setPen(arrow);
+    p.setBrush(Qt::NoBrush);
+
+    // The markdown mark: bold white "M" with the trailing stroke dipping
+    // down like the markdown logo's arrow.
+    p.drawLine(5.0, 16.0, 5.0, 8.5);
+    p.drawPolyline(QVector<QPointF>{ { 5.0, 8.5 }, { 9.5, 14.0 }, { 14.0, 8.5 } });
+    p.drawLine(14.0, 8.5, 14.0, 16.0);
+    // The downward tail: vertical stub then arrowhead to the lower right.
+    p.drawLine(16.5, 9.0, 16.5, 15.0);
+    p.drawPolyline(QVector<QPointF>{ { 13.8, 12.6 }, { 16.5, 15.6 }, { 19.2, 12.6 } });
+    p.end();
+    return pm;
+}
+
+QIcon applicationIcon()
+{
+    QIcon icon;
+    for (int size : { 16, 24, 32, 48, 64, 128, 256 }) {
+        QPixmap pm = applicationIconPixmap(size * 2);
+        pm.setDevicePixelRatio(2.0);
+        icon.addPixmap(pm);
+    }
+    return icon;
+}
+
 } // namespace appicons
