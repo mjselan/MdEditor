@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<Package>
+    <DisplayName>Markdown Editor</DisplayName>
+    <Description>Freebuff Markdown Editor application</Description>
+    <Version>1.0.0</Version>
+    <ReleaseDate>2026-09-22</ReleaseDate>
+    <Default>true</Default>
+    <Forced>true</Forced>
+    <RequiresAdminRights>true</RequiresAdminRights>
+    <Script>installscript.qs</Script>
+</Package>

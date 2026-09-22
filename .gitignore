@@ -66,3 +66,8 @@ tmp/
 
 # Generated application icon (makeico tool; regenerate via the app_icon target)
 resources/app.ico
+
+# Qt IFW installer: keep config/meta sources; ignore deployed payload + outputs
+Installer/packages/*/data/
+Installer/*.exe
+InstallationLog.txt

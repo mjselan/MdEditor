@@ -54,10 +54,15 @@ target_link_libraries(markdowneditor PRIVATE
 # renders it into resources/app.ico (classic uncompressed BMP entries), and the
 # .rc script embeds it into the exe. Regenerated at configure time when stale.
 if(WIN32)
-    add_executable(makeico tools/makeico/main.cpp src/appicons.cpp)
-    target_include_directories(makeico PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/src)
-    target_link_libraries(makeico PRIVATE Qt6::Gui)
-    set_target_properties(makeico PROPERTIES WIN32_EXECUTABLE OFF)
+    # Target is named tool_makeico (not makeico) so it sorts *after*
+    # markdowneditor in the CMake file API / Qt Creator run-config list.
+    # Qt Creator defaults to run configuration index 0; with "makeico"
+    # alphabetically first it would launch the icon tool with no args
+    # ("usage: makeico <output.ico>") instead of the editor.
+    add_executable(tool_makeico tools/makeico/main.cpp src/appicons.cpp)
+    target_include_directories(tool_makeico PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/src)
+    target_link_libraries(tool_makeico PRIVATE Qt6::Gui)
+    set_target_properties(tool_makeico PROPERTIES WIN32_EXECUTABLE OFF)
 
     set(FREEBUFF_APP_RC "${CMAKE_CURRENT_SOURCE_DIR}/resources/app.rc")
     set(FREEBUFF_APP_ICO "${CMAKE_CURRENT_SOURCE_DIR}/resources/app.ico")
@@ -65,8 +70,8 @@ if(WIN32)
         OUTPUT "${FREEBUFF_APP_ICO}"
         COMMAND ${CMAKE_COMMAND} -E env
             "PATH=$<TARGET_FILE_DIR:Qt6::Core>\\;$ENV{PATH}"
-            $<TARGET_FILE:makeico> "${FREEBUFF_APP_ICO}"
-        DEPENDS makeico tools/makeico/main.cpp src/appicons.cpp src/appicons.h
+            $<TARGET_FILE:tool_makeico> "${FREEBUFF_APP_ICO}"
+        DEPENDS tool_makeico tools/makeico/main.cpp src/appicons.cpp src/appicons.h
         COMMENT "Generating resources/app.ico")
     add_custom_target(app_icon DEPENDS "${FREEBUFF_APP_ICO}")
     add_dependencies(markdowneditor app_icon)
