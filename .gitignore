@@ -33,6 +33,7 @@ ui_*.h
 Debug/
 Release/
 x64/
+.VSCodeCounter/
 
 # Compiled output
 *.exe

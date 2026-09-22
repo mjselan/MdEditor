@@ -1,30 +1,43 @@
+// Component script for com.freebuff.markdowneditor.
+// Adds Start Menu shortcuts on install; IFW removes them again on uninstall
+// because CreateShortcut operations are transactional.
+
 function Component()
 {
-    // installer default
 }
 
 Component.prototype.createOperations = function()
 {
+    // Default operations: extract files, write maintenance tool, etc.
     component.createOperations();
 
     if (systemInfo.productType === "windows") {
-        // Windows shell wants backslash paths in IconLocation; IFW expands
-        // @TargetDir@ with forward slashes which can leave shortcuts iconless.
-        var exe = installer.value("TargetDir").replace(/\//g, "\\") + "\\markdowneditor.exe";
+        var appExe = "@TargetDir@/markdowneditor.exe";
 
+        // Application shortcut inside the Start Menu group from config.xml
+        // (<StartMenuDir>Freebuff Markdown Editor</StartMenuDir>).
         component.addOperation("CreateShortcut",
-            exe,
-            installer.value("StartMenuDir") + "\\Markdown Editor.lnk",
-            "workingDirectory=" + installer.value("TargetDir").replace(/\//g, "\\"),
-            "iconPath=" + exe,
+            appExe,
+            "@StartMenuDir@/Freebuff Markdown Editor.lnk",
+            "iconPath=" + appExe,
             "iconId=0",
-            "description=Freebuff Markdown Editor");
+            "workingDirectory=@TargetDir@");
+
+        // Maintenance tool shortcut (modify / repair / uninstall).
+        var maint = "@TargetDir@/maintenancetool.exe";
         component.addOperation("CreateShortcut",
-            exe,
-            installer.value("DesktopDir") + "\\Markdown Editor.lnk",
-            "workingDirectory=" + installer.value("TargetDir").replace(/\//g, "\\"),
-            "iconPath=" + exe,
+            maint,
+            "@StartMenuDir@/Uninstall Freebuff Markdown Editor.lnk",
+            "iconPath=" + maint,
             "iconId=0",
-            "description=Freebuff Markdown Editor");
+            "workingDirectory=@TargetDir@");
+
+        // Optional per-user desktop shortcut - uncomment to enable.
+        // component.addOperation("CreateShortcut",
+        //     appExe,
+        //     "@DesktopDir@/Freebuff Markdown Editor.lnk",
+        //     "iconPath=" + appExe,
+        //     "iconId=0",
+        //     "workingDirectory=@TargetDir@");
     }
-};
+}

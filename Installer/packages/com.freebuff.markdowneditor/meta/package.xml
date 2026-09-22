@@ -1,11 +1,12 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <Package>
-    <DisplayName>Markdown Editor</DisplayName>
-    <Description>Freebuff Markdown Editor application</Description>
+    <DisplayName>Freebuff Markdown Editor</DisplayName>
+    <Description>Freebuff Markdown Editor application, Qt runtime, spell-check backend and English dictionary.</Description>
     <Version>1.0.0</Version>
     <ReleaseDate>2026-09-22</ReleaseDate>
-    <Default>true</Default>
-    <Forced>true</Forced>
-    <RequiresAdminRights>true</RequiresAdminRights>
+    <Name>com.freebuff.markdowneditor</Name>
+    <Dependencies></Dependencies>
+    <ForcedInstallation>true</ForcedInstallation>
+    <Essential>false</Essential>
     <Script>installscript.qs</Script>
 </Package>
