@@ -51,10 +51,45 @@ target_link_libraries(markdowneditor PRIVATE
 # --- Optional spell check via KDE Frameworks Sonnet -------------------------
 # When Sonnet is not installed the editor builds and runs normally with
 # spell check disabled; no other functionality is affected.
-find_package(KF6Sonnet QUIET COMPONENTS SonnetUi SonnetCore)
+#
+# A full KF6 Sonnet + static hunspell stack lives in build/prefix (built by
+# build\hunspell-cl.bat + build\deps-sonnet.bat). When that prefix exists it
+# is searched first; otherwise a system KF6Sonnet is used if present.
+if(NOT FREEBUFF_SONNET_PREFIX AND EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/build/prefix/lib/cmake/KF6Sonnet")
+    set(FREEBUFF_SONNET_PREFIX "${CMAKE_CURRENT_SOURCE_DIR}/build/prefix")
+endif()
+
+set(FREEBUFF_SONNET_SEARCH "")
+if(FREEBUFF_SONNET_PREFIX)
+    list(APPEND FREEBUFF_SONNET_SEARCH "${FREEBUFF_SONNET_PREFIX}/lib/cmake/KF6Sonnet")
+endif()
+
+find_package(KF6Sonnet QUIET COMPONENTS SonnetUi SonnetCore
+    PATHS ${FREEBUFF_SONNET_SEARCH}
+    NO_DEFAULT_PATH)
+if(NOT KF6Sonnet_FOUND)
+    find_package(KF6Sonnet QUIET COMPONENTS SonnetUi SonnetCore)
+endif()
+
 if(KF6Sonnet_FOUND)
     target_link_libraries(markdowneditor PRIVATE KF6::SonnetUi KF6::SonnetCore)
     target_compile_definitions(markdowneditor PRIVATE FREEBUFF_HAVE_SONNET)
+    if(FREEBUFF_SONNET_PREFIX)
+        # Runtime layout for a prefix-based Sonnet: Loader searches
+        # QCoreApplication::libraryPaths() + "/kf6/sonnet" (the exe dir), and
+        # dictionary data is found via the baked SONNET_INSTALL_PREFIX
+        # (build/prefix/bin/data/hunspell). No extra environment needed.
+        foreach(_sonnet_dll KF6SonnetCore.dll KF6SonnetUi.dll)
+            add_custom_command(TARGET markdowneditor POST_BUILD
+                COMMAND ${CMAKE_COMMAND} -E copy_if_different
+                    "${FREEBUFF_SONNET_PREFIX}/bin/${_sonnet_dll}"
+                    $<TARGET_FILE_DIR:markdowneditor>)
+        endforeach()
+        add_custom_command(TARGET markdowneditor POST_BUILD
+            COMMAND ${CMAKE_COMMAND} -E copy_if_different
+                "${FREEBUFF_SONNET_PREFIX}/lib/plugins/kf6/sonnet/sonnet_hunspell.dll"
+                "$<TARGET_FILE_DIR:markdowneditor>/kf6/sonnet/sonnet_hunspell.dll")
+    endif()
     message(STATUS "Sonnet found - spell check enabled")
 else()
     message(STATUS "Sonnet not found - building without spell check")
@@ -93,6 +128,18 @@ if(BUILD_TESTING)
     if(KF6Sonnet_FOUND)
         target_link_libraries(test_core PRIVATE KF6::SonnetUi KF6::SonnetCore)
         target_compile_definitions(test_core PRIVATE FREEBUFF_HAVE_SONNET)
+        if(FREEBUFF_SONNET_PREFIX)
+            foreach(_sonnet_dll KF6SonnetCore.dll KF6SonnetUi.dll)
+                add_custom_command(TARGET test_core POST_BUILD
+                    COMMAND ${CMAKE_COMMAND} -E copy_if_different
+                        "${FREEBUFF_SONNET_PREFIX}/bin/${_sonnet_dll}"
+                        $<TARGET_FILE_DIR:test_core>)
+            endforeach()
+            add_custom_command(TARGET test_core POST_BUILD
+                COMMAND ${CMAKE_COMMAND} -E copy_if_different
+                    "${FREEBUFF_SONNET_PREFIX}/lib/plugins/kf6/sonnet/sonnet_hunspell.dll"
+                    "$<TARGET_FILE_DIR:test_core>/kf6/sonnet/sonnet_hunspell.dll")
+        endif()
     endif()
     add_test(NAME test_core COMMAND test_core)
 endif()

@@ -7,6 +7,7 @@
 #include <QVector>
 
 class QTextDocument;
+class SpellChecker;
 
 // Live markdown syntax highlighting. Qt re-highlights only the changed block
 // (plus neighbors when block states change), which keeps very large documents
@@ -39,12 +40,21 @@ public:
 
     void setColors(const QHash<QString, QColor> &colors);
 
+    // Attach an optional spell checker. When set and enabled, words it
+    // reports as misspelled get the "misspelled" theme underline. Code
+    // segments are never spell checked.
+    void setSpellChecker(SpellChecker *checker);
+
     // Headings in document order as [level, text] pairs; used by the outline.
     QVector<QPair<int, QString>> headings() const;
 
     // Static parsing helpers shared with the outline panel and tests.
     static int headingLevel(const QString &text, QString *title = nullptr);
     static bool isOpenFence(const QString &text, FenceInfo *info = nullptr);
+
+    // Character ranges of a line that must be excluded from spell checking:
+    // the whole line for fenced lines, inline code spans, and link targets.
+    static QVector<QPair<int, int>> codeSegments(const QString &text);
 
 protected:
     void highlightBlock(const QString &text) override;
@@ -54,8 +64,11 @@ private:
     void highlightQuote(const QString &text);
     void highlightList(const QString &text);
     void highlightInline(const QString &text);
+    void spellCheck(const QString &text);
 
     QHash<QString, QTextCharFormat> m_formats;
+    QTextCharFormat m_misspelledFormat;
+    SpellChecker *m_spell = nullptr;
     class Private;
     Private *d;
 };

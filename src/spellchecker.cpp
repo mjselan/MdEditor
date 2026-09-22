@@ -1,18 +1,14 @@
 #include "spellchecker.h"
 
 #ifdef FREEBUFF_HAVE_SONNET
-#include <Sonnet/Speller>
-#include <Sonnet/SpellCheckDecorator>
+#include <Sonnet/speller.h>
 #endif
 
 class SpellChecker::Impl
 {
 public:
 #ifdef FREEBUFF_HAVE_SONNET
-    Sonnet::Speller *speller = nullptr;
-    Sonnet::SpellCheckDecorator *decorator = nullptr;
-    bool enabled = true;
-#else
+    Sonnet::Speller speller; // value type in KF6 Sonnet; no heap wrapper needed
     bool enabled = false;
 #endif
 };
@@ -21,9 +17,6 @@ SpellChecker::SpellChecker(QObject *parent)
     : QObject(parent)
     , d(new Impl)
 {
-#ifdef FREEBUFF_HAVE_SONNET
-    d->speller = new Sonnet::Speller(this);
-#endif
 }
 
 SpellChecker::~SpellChecker() = default;
@@ -31,7 +24,7 @@ SpellChecker::~SpellChecker() = default;
 bool SpellChecker::available() const
 {
 #ifdef FREEBUFF_HAVE_SONNET
-    return d->speller->isValid();
+    return d->speller.isValid();
 #else
     return false;
 #endif
@@ -39,27 +32,18 @@ bool SpellChecker::available() const
 
 bool SpellChecker::enabled() const
 {
-    return available() && d->enabled;
-}
-
-void SpellChecker::attachTo(QSyntaxHighlighter *highlighter)
-{
-    if (!highlighter)
-        return;
 #ifdef FREEBUFF_HAVE_SONNET
-    delete d->decorator;
-    d->decorator = new Sonnet::SpellCheckDecorator(highlighter);
-    d->decorator->setActive(d->enabled);
+    return available() && d->enabled;
 #else
-    Q_UNUSED(highlighter);
+    return false;
 #endif
 }
 
 QString SpellChecker::currentDictionary() const
 {
 #ifdef FREEBUFF_HAVE_SONNET
-    if (d->speller->isValid())
-        return d->speller->currentLanguage();
+    if (d->speller.isValid())
+        return d->speller.language();
 #endif
     return {};
 }
@@ -67,17 +51,36 @@ QString SpellChecker::currentDictionary() const
 QStringList SpellChecker::dictionaries() const
 {
 #ifdef FREEBUFF_HAVE_SONNET
-    if (d->speller->isValid())
-        return d->speller->availableLanguages();
+    if (d->speller.isValid())
+        return d->speller.availableLanguages();
 #endif
     return {};
+}
+
+bool SpellChecker::isWordCorrect(const QString &word) const
+{
+#ifdef FREEBUFF_HAVE_SONNET
+    if (!enabled() || !d->speller.isValid())
+        return true;
+    if (word.size() < 2)
+        return true;
+    // Words containing digits (versions, hashes) are never flagged.
+    for (const QChar &ch : word) {
+        if (ch.isDigit())
+            return true;
+    }
+    return !d->speller.isMisspelled(word);
+#else
+    Q_UNUSED(word);
+    return true;
+#endif
 }
 
 QStringList SpellChecker::suggestionsFor(const QString &word) const
 {
 #ifdef FREEBUFF_HAVE_SONNET
-    if (enabled() && d->speller->isValid() && !d->speller->check(word))
-        return d->speller->suggest(word);
+    if (enabled() && d->speller.isValid() && d->speller.isMisspelled(word))
+        return d->speller.suggest(word);
 #endif
     return {};
 }
@@ -85,8 +88,12 @@ QStringList SpellChecker::suggestionsFor(const QString &word) const
 void SpellChecker::ignoreWord(const QString &word)
 {
 #ifdef FREEBUFF_HAVE_SONNET
-    if (d->speller->isValid())
-        d->speller->addToSession(word);
+    if (d->speller.isValid()) {
+        d->speller.addToSession(word);
+        if (d->enabled)
+            emit stateChanged(); // underline refresh for this session word
+    }
+    return;
 #endif
     Q_UNUSED(word);
 }
@@ -94,31 +101,37 @@ void SpellChecker::ignoreWord(const QString &word)
 void SpellChecker::addToPersonal(const QString &word)
 {
 #ifdef FREEBUFF_HAVE_SONNET
-    if (d->speller->isValid())
-        d->speller->addToPersonal(word);
+    if (d->speller.isValid()) {
+        d->speller.addToPersonal(word);
+        if (d->enabled)
+            emit stateChanged();
+    }
+    return;
 #endif
     Q_UNUSED(word);
 }
 
 void SpellChecker::setEnabled(bool enabled)
 {
+#ifdef FREEBUFF_HAVE_SONNET
     if (d->enabled == enabled)
         return;
     d->enabled = enabled;
-#ifdef FREEBUFF_HAVE_SONNET
-    if (d->decorator)
-        d->decorator->setActive(enabled);
-#endif
     emit stateChanged();
+    return;
+#endif
+    Q_UNUSED(enabled);
 }
 
 void SpellChecker::setDictionary(const QString &dictionary)
 {
 #ifdef FREEBUFF_HAVE_SONNET
-    if (d->speller->isValid()) {
-        d->speller->setLanguage(dictionary);
-        emit stateChanged();
+    if (d->speller.isValid()) {
+        d->speller.setLanguage(dictionary);
+        if (d->enabled)
+            emit stateChanged();
     }
+    return;
 #endif
     Q_UNUSED(dictionary);
 }

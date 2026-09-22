@@ -3,12 +3,15 @@
 #include <QObject>
 #include <QStringList>
 
-class QSyntaxHighlighter;
-
-// Facade over KDE Frameworks Sonnet. When the library was not found at CMake
-// configure time (FREEBUFF_HAVE_SONNET undefined) every method degrades to a
-// harmless no-op and available() returns false, so callers can wire the UI up
-// unconditionally.
+// Spell-check facade over KDE Frameworks Sonnet's core Speller. When the
+// library was not found at CMake configure time (FREEBUFF_HAVE_SONNET
+// undefined) every method degrades to a harmless no-op and available()
+// returns false, so callers can wire the UI up unconditionally.
+//
+// The markdown highlighter asks the checker about words it tokenizes and
+// draws the misspelled underline itself; that keeps spell formatting and
+// markdown formatting in one highlighter so they can never fight over the
+// same block.
 class SpellChecker : public QObject
 {
     Q_OBJECT
@@ -20,12 +23,12 @@ public:
     bool available() const;
     bool enabled() const;
 
-    // Wraps the given highlighter with Sonnet's decorator so misspelled words
-    // get the spell-check underline while our markdown formats stay intact.
-    void attachTo(QSyntaxHighlighter *highlighter);
-
     QString currentDictionary() const;
     QStringList dictionaries() const;
+
+    // True when the word needs no underline: correct, session-ignored,
+    // personal, containing digits, or spell checking disabled/absent.
+    bool isWordCorrect(const QString &word) const;
 
     QStringList suggestionsFor(const QString &word) const;
     void ignoreWord(const QString &word);

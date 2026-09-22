@@ -97,10 +97,9 @@ void MainWindow::createWidgets()
 
     m_highlighter->setColors(theme::syntaxColors(m_themeMode));
 
-    if (m_spellChecker->available()) {
-        m_spellChecker->attachTo(m_highlighter);
+    m_highlighter->setSpellChecker(m_spellChecker);
+    if (m_spellChecker->available())
         m_spellChecker->setEnabled(true);
-    }
 
     m_splitter = new QSplitter(Qt::Horizontal, this);
     m_splitter->addWidget(m_editor);

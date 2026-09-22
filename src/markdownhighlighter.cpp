@@ -1,6 +1,9 @@
 #include "markdownhighlighter.h"
 
+#include "spellchecker.h"
+
 #include <QRegularExpression>
+#include <QTextBlock>
 #include <QTextDocument>
 
 namespace {
@@ -33,16 +36,17 @@ QVector<QPair<int, int>> inlineCodeSpans(const QString &text)
     QVector<QPair<int, int>> spans;
     int i = 0;
     while (i < text.size()) {
-        const auto open = backtick.match(text, i, QRegularExpression::NormalMatch,
-                                         QRegularExpression::AnchoredMatchOption);
+        // Unanchored search: next backtick run at or after i. (An
+        // AnchoredMatchOption would only find a span starting exactly at i,
+        // silently missing every mid-line code span.)
+        const auto open = backtick.match(text, i);
         if (!open.hasMatch())
             break;
         const QString ticks = open.captured(0);
         int j = open.capturedStart() + ticks.size();
         int close = -1;
         while (j < text.size()) {
-            const auto candidate = backtick.match(text, j, QRegularExpression::NormalMatch,
-                                                  QRegularExpression::AnchoredMatchOption);
+            const auto candidate = backtick.match(text, j);
             if (!candidate.hasMatch())
                 break;
             if (candidate.captured(0).size() == ticks.size()) {
@@ -97,6 +101,9 @@ MarkdownHighlighter::MarkdownHighlighter(QTextDocument *document)
     : QSyntaxHighlighter(document)
     , d(new Private)
 {
+    m_misspelledFormat.setFontUnderline(true);
+    m_misspelledFormat.setUnderlineStyle(QTextCharFormat::SpellCheckUnderline);
+    m_misspelledFormat.setToolTip(QObject::tr("Spelling mistake"));
 }
 
 void MarkdownHighlighter::setColors(const QHash<QString, QColor> &colors)
@@ -117,6 +124,18 @@ void MarkdownHighlighter::setColors(const QHash<QString, QColor> &colors)
     m_formats.insert(QStringLiteral("quote"), makeFormat(color("quote"), false, true));
     m_formats.insert(QStringLiteral("listMarker"), makeFormat(color("listMarker"), true));
 
+    const QColor misspelled = color("misspelled");
+    if (misspelled.isValid())
+        m_misspelledFormat.setUnderlineColor(misspelled);
+
+    rehighlight();
+}
+
+void MarkdownHighlighter::setSpellChecker(SpellChecker *checker)
+{
+    if (m_spell == checker)
+        return;
+    m_spell = checker;
     rehighlight();
 }
 
@@ -161,6 +180,7 @@ void MarkdownHighlighter::highlightBlock(const QString &text)
     highlightQuote(text);
     highlightList(text);
     highlightInline(text);
+    spellCheck(text);
 }
 
 void MarkdownHighlighter::highlightHeading(const QString &text)
@@ -225,6 +245,41 @@ void MarkdownHighlighter::highlightInline(const QString &text)
     while (linkIt.hasNext()) {
         const auto m = linkIt.next();
         setFormat(m.capturedStart(0), m.capturedLength(0), m_formats.value(QStringLiteral("link")));
+    }
+}
+
+QVector<QPair<int, int>> MarkdownHighlighter::codeSegments(const QString &text)
+{
+    QVector<QPair<int, int>> spans;
+    if (isOpenFence(text))
+        spans.append({ 0, text.size() });
+    spans.append(inlineCodeSpans(text));
+    return spans;
+}
+
+void MarkdownHighlighter::spellCheck(const QString &text)
+{
+    if (!m_spell || !m_spell->enabled())
+        return;
+
+    const auto spans = codeSegments(text);
+    static const QRegularExpression wordPattern(QStringLiteral("[\\w]+"),
+                                                QRegularExpression::UseUnicodePropertiesOption);
+
+    auto it = wordPattern.globalMatch(text);
+    while (it.hasNext()) {
+        const auto m = it.next();
+        const int start = m.capturedStart();
+        const int length = m.capturedLength();
+        bool inCode = false;
+        for (const auto &span : spans) {
+            if (start < span.first + span.second && span.first < start + length) {
+                inCode = true;
+                break;
+            }
+        }
+        if (!inCode && !m_spell->isWordCorrect(m.captured()))
+            setFormat(start, length, m_misspelledFormat);
     }
 }
 

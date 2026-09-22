@@ -4,6 +4,7 @@
 #include "markdownhighlighter.h"
 #include "mainwindow.h"
 #include "markdownpreview.h"
+#include "spellchecker.h"
 #include "theme.h"
 
 #include <QSignalSpy>
@@ -43,12 +44,25 @@ private slots:
     void previewRendersDocumentSource();
     void previewThrottleRendersAtMostOncePerInterval();
     void matchCountingDoesNotNeedCaret();
+    void spellCheckFlagsMisspellings();
+    void spellCheckSkipsCodeSegments();
     void themeColorsPresent();
     void palettesDifferByMode();
 
 private:
     static void selectRange(MarkdownEditor &editor, int from, int to);
+    static int spellUnderlineCount(const QTextBlock &block);
 };
+
+int TestCore::spellUnderlineCount(const QTextBlock &block)
+{
+    int count = 0;
+    for (const auto &range : block.layout()->formats()) {
+        if (range.format.underlineStyle() == QTextCharFormat::SpellCheckUnderline)
+            ++count;
+    }
+    return count;
+}
 
 void TestCore::headingLevelParsesLevels()
 {
@@ -332,6 +346,44 @@ void TestCore::matchCountingDoesNotNeedCaret()
     QCOMPARE(MainWindow::countMatchesInDocument(&doc, QStringLiteral("zzz"), false), 0);
     // Null document is safe
     QCOMPARE(MainWindow::countMatchesInDocument(nullptr, QStringLiteral("ip"), false), 0);
+}
+
+void TestCore::spellCheckFlagsMisspellings()
+{
+    SpellChecker checker;
+    if (!checker.available()) {
+        QSKIP("Sonnet not available in this build");
+    }
+    checker.setEnabled(true);
+    QVERIFY(checker.isWordCorrect(QStringLiteral("hello")));
+    QVERIFY(!checker.isWordCorrect(QStringLiteral("helllo")));
+
+    MarkdownHighlighter highlighter(nullptr);
+    highlighter.setSpellChecker(&checker);
+    QTextDocument doc;
+    doc.setPlainText(QStringLiteral("hello helllo world"));
+    highlighter.setDocument(&doc);
+    QVERIFY(doc.firstBlock().isValid());
+    QTest::qWait(50);
+    QCOMPARE(spellUnderlineCount(doc.firstBlock()), 1);
+}
+
+void TestCore::spellCheckSkipsCodeSegments()
+{
+    SpellChecker checker;
+    if (!checker.available()) {
+        QSKIP("Sonnet not available in this build");
+    }
+    checker.setEnabled(true);
+
+    MarkdownHighlighter highlighter(nullptr);
+    highlighter.setSpellChecker(&checker);
+    QTextDocument doc;
+    // `helllo` sits in inline code; `zzqqx` is plain prose.
+    doc.setPlainText(QStringLiteral("use `helllo` code zzqqx here"));
+    highlighter.setDocument(&doc);
+    QTest::qWait(50);
+    QCOMPARE(spellUnderlineCount(doc.firstBlock()), 1);
 }
 
 void TestCore::themeColorsPresent()

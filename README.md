@@ -18,7 +18,7 @@ A cross-platform desktop Markdown editor built with **Qt 6 Widgets (6.5+)** and 
 - **Configurable editor font** (`Ctrl++` / `Ctrl+-` / font dialog), persisted via `QSettings`
 - **Outline panel** (`Ctrl+Shift+O`): clickable table of contents built from headings
 - **Image paste**: clipboard images are saved to `assets/` next to the document and referenced with relative paths
-- **Spell check** (optional): enabled automatically when KDE Frameworks **Sonnet** is found at configure time
+- **Spell check** (optional): enabled automatically when KDE Frameworks **Sonnet** is found at configure time. Misspelled words get a wavy underline that skips inline code and fenced blocks; toggle via Tools → Spell Check. Sonnet's hunspell backend loads dictionaries from `share/hunspell`, `<prefix>/bin/data/hunspell`, or the OS package location.
 
 ### Renderer note
 
@@ -29,6 +29,8 @@ The preview uses Qt's built-in Markdown support; fenced code blocks are rendered
 - Qt 6.5 or newer (tested with Qt 6.11): `Core`, `Gui`, `Widgets`, `PrintSupport`, `Test` (tests only)
 - CMake 3.21+, Ninja (or any CMake generator), a C++20 compiler
 - *Optional:* KDE Frameworks Sonnet 6 (`KF6Sonnet`, components `SonnetUi` + `SonnetCore`) for spell check. The build degrades gracefully: without Sonnet everything works except spell check.
+
+  A self-contained Sonnet stack (ECM + static hunspell + KF6 Sonnet + en_US dictionaries) can be provisioned into `build/prefix` with the helper scripts in `build/`: `deps-ecm.bat`, `hunspell-cl.bat`, `deps-sonnet.bat`, `deps-dicts.bat` (Windows/MSVC; the Linux equivalents are `cmake` invocations of the same projects). CMake auto-detects that prefix and links against it; the runtime DLLs and the hunspell client plugin are copied next to the built binary automatically.
 
 ## Build
 
