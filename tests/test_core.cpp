@@ -2,6 +2,7 @@
 
 #include "markdowneditor.h"
 #include "markdownhighlighter.h"
+#include "appicons.h"
 #include "mainwindow.h"
 #include "markdownpreview.h"
 #include "spellchecker.h"
@@ -46,6 +47,7 @@ private slots:
     void matchCountingDoesNotNeedCaret();
     void spellCheckFlagsMisspellings();
     void spellCheckSkipsCodeSegments();
+    void toolbarIconsRenderOnBothBackgrounds();
     void themeColorsPresent();
     void palettesDifferByMode();
 
@@ -384,6 +386,27 @@ void TestCore::spellCheckSkipsCodeSegments()
     highlighter.setDocument(&doc);
     QTest::qWait(50);
     QCOMPARE(spellUnderlineCount(doc.firstBlock()), 1);
+}
+
+void TestCore::toolbarIconsRenderOnBothBackgrounds()
+{
+    // Every icon renders non-empty for both theme backgrounds.
+    for (int i = 0; i <= int(appicons::Icon::NumberedList); ++i) {
+        for (const QColor bg : { QColor(0xff, 0xff, 0xff), QColor(0x1e, 0x1e, 0x1e) }) {
+            const QIcon icon = appicons::makeIcon(static_cast<appicons::Icon>(i), bg);
+            QVERIFY(!icon.isNull());
+            QVERIFY2(!icon.availableSizes().isEmpty(),
+                     qPrintable(QStringLiteral("icon %1 has no sizes").arg(i)));
+            const QSize expected(48, 48); // largest requested bucket
+            QVERIFY(icon.availableSizes().contains(expected));
+            QPixmap pm = icon.pixmap(expected);
+            // The platform DPR (e.g. 125% Windows scaling) scales the request;
+            // validate the logical size via the pixmap's own DPR.
+            QCOMPARE(int(pm.width() / pm.devicePixelRatio()), expected.width());
+            QVERIFY2(!pm.toImage().allGray(),
+                     qPrintable(QStringLiteral("icon %1 rendered empty").arg(i)));
+        }
+    }
 }
 
 void TestCore::themeColorsPresent()

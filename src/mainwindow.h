@@ -21,6 +21,7 @@ class QDockWidget;
 class QLabel;
 class QMenu;
 class QSplitter;
+class QToolBar;
 
 // Main window: menus, toolbar, status bar, file management (new/open/save/
 // recents/drag-and-drop), HTML+PDF export, autosave recovery, theme and font
@@ -80,8 +81,10 @@ private:
     void createWidgets();
     void createActions();
     void createMenus();
+    void createToolbars();
     void createStatusBar();
     void connectSignals();
+    void refreshToolbarIcons();
 
     bool loadFile(const QString &path);
     bool saveToFile(const QString &path);
@@ -143,4 +146,22 @@ private:
     QAction *m_actionSmallerFont = nullptr;
     QAction *m_actionChooseFont = nullptr;
     QAction *m_actionSpellCheck = nullptr;
+
+    // Format actions (shared by Format menu and Format toolbar).
+    QAction *m_actionBold = nullptr;
+    QAction *m_actionItalic = nullptr;
+    QAction *m_actionStrike = nullptr;
+    QAction *m_actionH1 = nullptr;
+    QAction *m_actionH2 = nullptr;
+    QAction *m_actionH3 = nullptr;
+    QAction *m_actionNormal = nullptr;
+    QAction *m_actionLink = nullptr;
+    QAction *m_actionInlineCode = nullptr;
+    QAction *m_actionCodeBlock = nullptr;
+    QAction *m_actionBlockquote = nullptr;
+    QAction *m_actionBulletList = nullptr;
+    QAction *m_actionNumberedList = nullptr;
+
+    QToolBar *m_toolBarFile = nullptr;
+    QToolBar *m_toolBarFormat = nullptr;
 };

@@ -14,6 +14,7 @@ A cross-platform desktop Markdown editor built with **Qt 6 Widgets (6.5+)** and 
 - **Find & Replace** (`Ctrl+F` / `Ctrl+H`) with match-case and wrap-around
 - **Status bar**: word / character / line counts
 - **Light/Dark theme** following the OS setting by default, with manual override (persisted)
+- **Toolbars**: File (New, Open, Save, Undo, Redo, Export HTML/PDF, Print) and Format (Bold, Italic, Strikethrough, H1–H3, Normal, Link, Inline Code, Code Block, Blockquote, Bulleted/Numbered List). Icons are painted in code (`src/appicons.*`) — no asset files — and re-render automatically on theme switches. Toolbars are toggleable from the View menu.
 - **Export** to HTML and PDF
 - **Configurable editor font** (`Ctrl++` / `Ctrl+-` / font dialog), persisted via `QSettings`
 - **Outline panel** (`Ctrl+Shift+O`): clickable table of contents built from headings

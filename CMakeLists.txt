@@ -25,7 +25,8 @@ set(EDITOR_SOURCES
     src/outlinepanel.cpp
     src/findreplacebar.cpp
     src/theme.cpp
-    src/spellchecker.cpp)
+    src/spellchecker.cpp
+    src/appicons.cpp)
 
 set(EDITOR_HEADERS
     src/mainwindow.h
@@ -115,7 +116,9 @@ if(BUILD_TESTING)
         src/theme.cpp
         src/theme.h
         src/spellchecker.cpp
-        src/spellchecker.h)
+        src/spellchecker.h
+        src/appicons.cpp
+        src/appicons.h)
     target_include_directories(test_core PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/src)
     target_link_libraries(test_core PRIVATE
         Qt6::Core

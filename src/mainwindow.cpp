@@ -1,5 +1,7 @@
 #include "mainwindow.h"
 
+#include "appicons.h"
+
 #include <QAction>
 #include <QActionGroup>
 #include <QApplication>
@@ -30,6 +32,7 @@
 #include <QSignalBlocker>
 #include <QSplitter>
 #include <QStandardPaths>
+#include <QToolBar>
 #include <QStatusBar>
 #include <QTextBlock>
 #include <QTextDocument>
@@ -72,6 +75,7 @@ MainWindow::MainWindow(QWidget *parent)
 {
     createWidgets();
     createActions();
+    createToolbars(); // before createMenus: View menu adds toolbar toggles
     createMenus();
     createStatusBar();
     connectSignals();
@@ -209,6 +213,56 @@ void MainWindow::createActions()
         m_actionSpellCheck->setEnabled(false);
         m_actionSpellCheck->setToolTip(tr("Sonnet library not found; spell check disabled"));
     }
+
+    m_actionUndo = new QAction(tr("&Undo"), this);
+    m_actionUndo->setShortcut(QKeySequence::Undo);
+    connect(m_actionUndo, &QAction::triggered, m_editor, &QPlainTextEdit::undo);
+    m_actionRedo = new QAction(tr("&Redo"), this);
+    m_actionRedo->setShortcut(QKeySequence::Redo);
+    connect(m_actionRedo, &QAction::triggered, m_editor, &QPlainTextEdit::redo);
+
+    // Format actions are created here (not in createMenus) because both the
+    // Format toolbar and the Format menu share them.
+    const auto makeFormatAction = [this](const QString &text, const QKeySequence &shortcut,
+                                          void (MarkdownEditor::*slot)()) {
+        auto *action = new QAction(text, this);
+        action->setShortcut(shortcut);
+        connect(action, &QAction::triggered, m_editor, slot);
+        return action;
+    };
+
+    m_actionBold = makeFormatAction(tr("&Bold"), QKeySequence::Bold,
+                                    &MarkdownEditor::toggleBold);
+    m_actionItalic = makeFormatAction(tr("&Italic"), QKeySequence::Italic,
+                                      &MarkdownEditor::toggleItalic);
+    m_actionStrike = makeFormatAction(tr("Stri&kethrough"),
+                                      QKeySequence(QStringLiteral("Ctrl+Shift+K")),
+                                      &MarkdownEditor::toggleStrikethrough);
+    m_actionH1 = makeFormatAction(tr("Heading &1"), QKeySequence(QStringLiteral("Ctrl+1")),
+                                  &MarkdownEditor::setHeadingLevel1);
+    m_actionH2 = makeFormatAction(tr("Heading &2"), QKeySequence(QStringLiteral("Ctrl+2")),
+                                  &MarkdownEditor::setHeadingLevel2);
+    m_actionH3 = makeFormatAction(tr("Heading &3"), QKeySequence(QStringLiteral("Ctrl+3")),
+                                  &MarkdownEditor::setHeadingLevel3);
+    m_actionNormal = makeFormatAction(tr("&Normal text"), QKeySequence(QStringLiteral("Ctrl+0")),
+                                      &MarkdownEditor::setHeadingLevel0);
+    m_actionLink = makeFormatAction(tr("&Link"), QKeySequence(QStringLiteral("Ctrl+K")),
+                                    &MarkdownEditor::insertLink);
+    m_actionInlineCode = makeFormatAction(tr("Inline &Code"),
+                                          QKeySequence(QStringLiteral("Ctrl+Shift+C")),
+                                          &MarkdownEditor::toggleInlineCode);
+    m_actionCodeBlock = makeFormatAction(tr("Code &Block"),
+                                         QKeySequence(QStringLiteral("Ctrl+Shift+B")),
+                                         &MarkdownEditor::toggleFencedCodeBlock);
+    m_actionBlockquote = makeFormatAction(tr("Block&quote"),
+                                          QKeySequence(QStringLiteral("Ctrl+Shift+Q")),
+                                          &MarkdownEditor::toggleBlockquote);
+    m_actionBulletList = makeFormatAction(tr("&Bulleted List"),
+                                          QKeySequence(QStringLiteral("Ctrl+Shift+U")),
+                                          &MarkdownEditor::toggleBulletList);
+    m_actionNumberedList = makeFormatAction(tr("&Numbered List"),
+                                            QKeySequence(QStringLiteral("Ctrl+Shift+N")),
+                                            &MarkdownEditor::toggleNumberedList);
 }
 
 void MainWindow::createMenus()
@@ -229,13 +283,6 @@ void MainWindow::createMenus()
     fileMenu->addAction(m_actionQuit);
     updateRecentMenu();
 
-    m_actionUndo = new QAction(tr("&Undo"), this);
-    m_actionUndo->setShortcut(QKeySequence::Undo);
-    connect(m_actionUndo, &QAction::triggered, m_editor, &QPlainTextEdit::undo);
-    m_actionRedo = new QAction(tr("&Redo"), this);
-    m_actionRedo->setShortcut(QKeySequence::Redo);
-    connect(m_actionRedo, &QAction::triggered, m_editor, &QPlainTextEdit::redo);
-
     QMenu *editMenu = menuBar()->addMenu(tr("&Edit"));
     editMenu->addAction(m_actionUndo);
     editMenu->addAction(m_actionRedo);
@@ -243,51 +290,23 @@ void MainWindow::createMenus()
     editMenu->addAction(m_actionFind);
     editMenu->addAction(m_actionReplace);
 
-    const auto addFormatAction = [this](QMenu *menu, const QString &text,
-                                        const QKeySequence &shortcut,
-                                        void (MarkdownEditor::*slot)()) {
-        QAction *action = menu->addAction(text);
-        action->setShortcut(shortcut);
-        connect(action, &QAction::triggered, m_editor, slot);
-        return action;
-    };
-
     QMenu *formatMenu = menuBar()->addMenu(tr("For&mat"));
-    addFormatAction(formatMenu, tr("&Bold"), QKeySequence::Bold,
-                    &MarkdownEditor::toggleBold);
-    addFormatAction(formatMenu, tr("&Italic"), QKeySequence::Italic,
-                    &MarkdownEditor::toggleItalic);
-    addFormatAction(formatMenu, tr("Stri&kethrough"),
-                    QKeySequence(QStringLiteral("Ctrl+Shift+K")),
-                    &MarkdownEditor::toggleStrikethrough);
+    formatMenu->addAction(m_actionBold);
+    formatMenu->addAction(m_actionItalic);
+    formatMenu->addAction(m_actionStrike);
     formatMenu->addSeparator();
-    addFormatAction(formatMenu, tr("Heading &1"), QKeySequence(QStringLiteral("Ctrl+1")),
-                    &MarkdownEditor::setHeadingLevel1);
-    addFormatAction(formatMenu, tr("Heading &2"), QKeySequence(QStringLiteral("Ctrl+2")),
-                    &MarkdownEditor::setHeadingLevel2);
-    addFormatAction(formatMenu, tr("Heading &3"), QKeySequence(QStringLiteral("Ctrl+3")),
-                    &MarkdownEditor::setHeadingLevel3);
-    addFormatAction(formatMenu, tr("&Normal text"), QKeySequence(QStringLiteral("Ctrl+0")),
-                    &MarkdownEditor::setHeadingLevel0);
+    formatMenu->addAction(m_actionH1);
+    formatMenu->addAction(m_actionH2);
+    formatMenu->addAction(m_actionH3);
+    formatMenu->addAction(m_actionNormal);
     formatMenu->addSeparator();
-    addFormatAction(formatMenu, tr("&Link"), QKeySequence(QStringLiteral("Ctrl+K")),
-                    &MarkdownEditor::insertLink);
-    addFormatAction(formatMenu, tr("Inline &Code"),
-                    QKeySequence(QStringLiteral("Ctrl+Shift+C")),
-                    &MarkdownEditor::toggleInlineCode);
-    addFormatAction(formatMenu, tr("Code &Block"),
-                    QKeySequence(QStringLiteral("Ctrl+Shift+B")),
-                    &MarkdownEditor::toggleFencedCodeBlock);
+    formatMenu->addAction(m_actionLink);
+    formatMenu->addAction(m_actionInlineCode);
+    formatMenu->addAction(m_actionCodeBlock);
     formatMenu->addSeparator();
-    addFormatAction(formatMenu, tr("Block&quote"),
-                    QKeySequence(QStringLiteral("Ctrl+Shift+Q")),
-                    &MarkdownEditor::toggleBlockquote);
-    addFormatAction(formatMenu, tr("&Bulleted List"),
-                    QKeySequence(QStringLiteral("Ctrl+Shift+U")),
-                    &MarkdownEditor::toggleBulletList);
-    addFormatAction(formatMenu, tr("&Numbered List"),
-                    QKeySequence(QStringLiteral("Ctrl+Shift+N")),
-                    &MarkdownEditor::toggleNumberedList);
+    formatMenu->addAction(m_actionBlockquote);
+    formatMenu->addAction(m_actionBulletList);
+    formatMenu->addAction(m_actionNumberedList);
 
     QMenu *viewMenu = menuBar()->addMenu(tr("&View"));
     QMenu *themeMenu = viewMenu->addMenu(tr("&Theme"));
@@ -296,12 +315,87 @@ void MainWindow::createMenus()
     themeMenu->addAction(m_actionThemeDark);
     viewMenu->addAction(m_actionOutline);
     viewMenu->addSeparator();
+    for (QToolBar *bar : findChildren<QToolBar *>())
+        viewMenu->addAction(bar->toggleViewAction());
+    viewMenu->addSeparator();
     viewMenu->addAction(m_actionLargerFont);
     viewMenu->addAction(m_actionSmallerFont);
     viewMenu->addAction(m_actionChooseFont);
 
     QMenu *toolsMenu = menuBar()->addMenu(tr("&Tools"));
     toolsMenu->addAction(m_actionSpellCheck);
+}
+
+void MainWindow::createToolbars()
+{
+    const QSize iconSize(18, 18);
+
+    m_toolBarFile = addToolBar(tr("File"));
+    m_toolBarFile->setObjectName(QStringLiteral("toolbarFile"));
+    m_toolBarFile->setIconSize(iconSize);
+    m_toolBarFile->setMovable(false);
+    m_toolBarFile->addAction(m_actionNew);
+    m_toolBarFile->addAction(m_actionOpen);
+    m_toolBarFile->addAction(m_actionSave);
+    m_toolBarFile->addSeparator();
+    m_toolBarFile->addAction(m_actionUndo);
+    m_toolBarFile->addAction(m_actionRedo);
+    m_toolBarFile->addSeparator();
+    m_toolBarFile->addAction(m_actionExportHtml);
+    m_toolBarFile->addAction(m_actionExportPdf);
+    m_toolBarFile->addAction(m_actionPrint);
+
+    m_toolBarFormat = addToolBar(tr("Format"));
+    m_toolBarFormat->setObjectName(QStringLiteral("toolbarFormat"));
+    m_toolBarFormat->setIconSize(iconSize);
+    m_toolBarFormat->setMovable(false);
+    m_toolBarFormat->addAction(m_actionBold);
+    m_toolBarFormat->addAction(m_actionItalic);
+    m_toolBarFormat->addAction(m_actionStrike);
+    m_toolBarFormat->addSeparator();
+    m_toolBarFormat->addAction(m_actionH1);
+    m_toolBarFormat->addAction(m_actionH2);
+    m_toolBarFormat->addAction(m_actionH3);
+    m_toolBarFormat->addAction(m_actionNormal);
+    m_toolBarFormat->addSeparator();
+    m_toolBarFormat->addAction(m_actionLink);
+    m_toolBarFormat->addAction(m_actionInlineCode);
+    m_toolBarFormat->addAction(m_actionCodeBlock);
+    m_toolBarFormat->addSeparator();
+    m_toolBarFormat->addAction(m_actionBlockquote);
+    m_toolBarFormat->addAction(m_actionBulletList);
+    m_toolBarFormat->addAction(m_actionNumberedList);
+
+    refreshToolbarIcons();
+}
+
+void MainWindow::refreshToolbarIcons()
+{
+    using appicons::Icon;
+    const QColor window = palette().window().color();
+    appicons::refresh(window);
+
+    m_actionNew->setIcon(appicons::iconFor(Icon::NewFile));
+    m_actionOpen->setIcon(appicons::iconFor(Icon::Open));
+    m_actionSave->setIcon(appicons::iconFor(Icon::Save));
+    m_actionUndo->setIcon(appicons::iconFor(Icon::Undo));
+    m_actionRedo->setIcon(appicons::iconFor(Icon::Redo));
+    m_actionExportHtml->setIcon(appicons::iconFor(Icon::ExportHtml));
+    m_actionExportPdf->setIcon(appicons::iconFor(Icon::ExportPdf));
+    m_actionPrint->setIcon(appicons::iconFor(Icon::Print));
+    m_actionBold->setIcon(appicons::iconFor(Icon::Bold));
+    m_actionItalic->setIcon(appicons::iconFor(Icon::Italic));
+    m_actionStrike->setIcon(appicons::iconFor(Icon::Strikethrough));
+    m_actionH1->setIcon(appicons::iconFor(Icon::H1));
+    m_actionH2->setIcon(appicons::iconFor(Icon::H2));
+    m_actionH3->setIcon(appicons::iconFor(Icon::H3));
+    m_actionNormal->setIcon(appicons::iconFor(Icon::PlainParagraph));
+    m_actionLink->setIcon(appicons::iconFor(Icon::Link));
+    m_actionInlineCode->setIcon(appicons::iconFor(Icon::InlineCode));
+    m_actionCodeBlock->setIcon(appicons::iconFor(Icon::CodeBlock));
+    m_actionBlockquote->setIcon(appicons::iconFor(Icon::Blockquote));
+    m_actionBulletList->setIcon(appicons::iconFor(Icon::BulletList));
+    m_actionNumberedList->setIcon(appicons::iconFor(Icon::NumberedList));
 }
 
 void MainWindow::createStatusBar()
@@ -668,6 +762,7 @@ void MainWindow::setThemeMode(int mode)
     qApp->setPalette(theme::paletteFor(m_themeMode));
     m_highlighter->setColors(theme::syntaxColors(m_themeMode));
     m_outline->setColors(palette().color(QPalette::Window), palette().color(QPalette::Text));
+    refreshToolbarIcons();
 }
 
 void MainWindow::onLargerFont()
