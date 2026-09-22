@@ -88,5 +88,11 @@ if(BUILD_TESTING)
         Qt6::Widgets
         Qt6::PrintSupport
         Qt6::Test)
+    # Mirror the optional Sonnet backend so the enabled code path is covered
+    # by CI wherever Sonnet is installed.
+    if(KF6Sonnet_FOUND)
+        target_link_libraries(test_core PRIVATE KF6::SonnetUi KF6::SonnetCore)
+        target_compile_definitions(test_core PRIVATE FREEBUFF_HAVE_SONNET)
+    endif()
     add_test(NAME test_core COMMAND test_core)
 endif()

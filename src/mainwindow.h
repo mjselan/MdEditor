@@ -53,6 +53,7 @@ private slots:
     bool saveFileAs();
     void exportHtml();
     void exportPdf();
+    void printFile();
 
     void onTextChanged();
     void onCursorPositionChanged();
@@ -128,6 +129,7 @@ private:
     QAction *m_actionSaveAs = nullptr;
     QAction *m_actionExportHtml = nullptr;
     QAction *m_actionExportPdf = nullptr;
+    QAction *m_actionPrint = nullptr;
     QAction *m_actionQuit = nullptr;
     QAction *m_actionUndo = nullptr;
     QAction *m_actionRedo = nullptr;

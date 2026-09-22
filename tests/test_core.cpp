@@ -3,8 +3,10 @@
 #include "markdowneditor.h"
 #include "markdownhighlighter.h"
 #include "mainwindow.h"
+#include "markdownpreview.h"
 #include "theme.h"
 
+#include <QSignalSpy>
 #include <QTextBlock>
 #include <QTextDocument>
 
@@ -34,9 +36,18 @@ private slots:
     void fenceLengthMustMatchOrExceed();
     void forEachSelectedLineKeepsEmptyTrailingBlock();
     void bulletToggleOnSelectionWithEmptyBlock();
+    void forEachSelectedLineExactOutputs();
+    void forEachSelectedLineSelectionEndsBeforeLineEnd();
+    void forEachSelectedLineWholeDocumentMultiLine();
+    void indentSelectionExactOutput();
+    void previewRendersDocumentSource();
+    void previewThrottleRendersAtMostOncePerInterval();
     void matchCountingDoesNotNeedCaret();
     void themeColorsPresent();
     void palettesDifferByMode();
+
+private:
+    static void selectRange(MarkdownEditor &editor, int from, int to);
 };
 
 void TestCore::headingLevelParsesLevels()
@@ -184,6 +195,127 @@ void TestCore::bulletToggleOnSelectionWithEmptyBlock()
     editor.setTextCursor(cursor);
     editor.toggleBulletList();
     QCOMPARE(editor.toPlainText(), QStringLiteral("a\n\nb"));
+}
+
+void TestCore::selectRange(MarkdownEditor &editor, int from, int to)
+{
+    QTextCursor cursor = editor.textCursor();
+    cursor.setPosition(from);
+    cursor.setPosition(to, QTextCursor::KeepAnchor);
+    editor.setTextCursor(cursor);
+}
+
+void TestCore::forEachSelectedLineExactOutputs()
+{
+    // Regression: a selection ending mid-line used to duplicate the unselected
+    // tail of the final line, because the transformed text was written into a
+    // range capped at the selection end. Every transform must replace through
+    // the end of the final affected line and leave "gamma" untouched.
+    {
+        MarkdownEditor editor;
+        editor.setPlainText(QStringLiteral("alpha\nbeta tail\ngamma"));
+        selectRange(editor, 0, 10); // ends inside "beta"
+        editor.setHeadingLevel(2);
+        QCOMPARE(editor.toPlainText(), QStringLiteral("## alpha\n## beta tail\ngamma"));
+    }
+    {
+        MarkdownEditor editor;
+        editor.setPlainText(QStringLiteral("alpha\nbeta tail\ngamma"));
+        selectRange(editor, 0, 10);
+        editor.toggleBlockquote();
+        QCOMPARE(editor.toPlainText(), QStringLiteral("> alpha\n> beta tail\ngamma"));
+    }
+    {
+        MarkdownEditor editor;
+        editor.setPlainText(QStringLiteral("alpha\nbeta tail\ngamma"));
+        selectRange(editor, 0, 10);
+        editor.toggleBulletList();
+        QCOMPARE(editor.toPlainText(), QStringLiteral("- alpha\n- beta tail\ngamma"));
+    }
+    {
+        MarkdownEditor editor;
+        editor.setPlainText(QStringLiteral("alpha\nbeta tail\ngamma"));
+        selectRange(editor, 0, 10);
+        editor.toggleNumberedList();
+        QCOMPARE(editor.toPlainText(), QStringLiteral("1. alpha\n2. beta tail\ngamma"));
+    }
+}
+
+void TestCore::forEachSelectedLineSelectionEndsBeforeLineEnd()
+{
+    // A selection ending on a separator (before the last line's content) must
+    // transform only the fully selected line.
+    MarkdownEditor editor;
+    editor.setPlainText(QStringLiteral("alpha\nbeta tail\ngamma"));
+    selectRange(editor, 0, 6); // 'a'..'a' + newline (position 6 ends before "beta")
+    editor.toggleBlockquote();
+    QCOMPARE(editor.toPlainText(), QStringLiteral("> alpha\nbeta tail\ngamma"));
+}
+
+void TestCore::forEachSelectedLineWholeDocumentMultiLine()
+{
+    MarkdownEditor editor;
+    editor.setPlainText(QStringLiteral("one\ntwo\nthree"));
+    selectRange(editor, 0, 13); // whole document
+    editor.toggleBulletList();
+    QCOMPARE(editor.toPlainText(), QStringLiteral("- one\n- two\n- three"));
+
+    // Toggling off with a fresh full-document selection restores the original.
+    QTextCursor cursor = editor.textCursor();
+    cursor.movePosition(QTextCursor::Start);
+    cursor.movePosition(QTextCursor::End, QTextCursor::KeepAnchor);
+    editor.setTextCursor(cursor);
+    editor.toggleBulletList();
+    QCOMPARE(editor.toPlainText(), QStringLiteral("one\ntwo\nthree"));
+}
+
+void TestCore::indentSelectionExactOutput()
+{
+    MarkdownEditor editor;
+    editor.setPlainText(QStringLiteral("alpha\nbeta tail\ngamma"));
+    selectRange(editor, 0, 10); // ends inside "beta"
+
+    QTest::keyClick(&editor, Qt::Key_Tab);
+    QCOMPARE(editor.toPlainText(), QStringLiteral("    alpha\n    beta tail\ngamma"));
+
+    // Full-document selection (characterCount() includes the final separator,
+    // so the maximum valid cursor position is one past it).
+    QTextCursor cursor = editor.textCursor();
+    cursor.movePosition(QTextCursor::Start);
+    cursor.movePosition(QTextCursor::End, QTextCursor::KeepAnchor);
+    editor.setTextCursor(cursor);
+    QTest::keyClick(&editor, Qt::Key_Backtab, Qt::ShiftModifier);
+    QCOMPARE(editor.toPlainText(), QStringLiteral("alpha\nbeta tail\ngamma"));
+}
+
+void TestCore::previewRendersDocumentSource()
+{
+    MarkdownPreview preview;
+    QTextDocument doc;
+    doc.setPlainText(QStringLiteral("# Title\n\nBody text"));
+    preview.setSourceDocument(&doc);
+    preview.renderNow(); // bypass the throttle for determinism
+
+    const QString text = preview.document()->toPlainText();
+    QVERIFY(text.contains(QStringLiteral("Title")));
+    QVERIFY(text.contains(QStringLiteral("Body text")));
+}
+
+void TestCore::previewThrottleRendersAtMostOncePerInterval()
+{
+    // scheduleRender() is a throttle, not a debounce: a burst of requests
+    // yields exactly one render at the first deadline.
+    MarkdownPreview preview;
+    QTextDocument doc;
+    doc.setPlainText(QStringLiteral("hello"));
+    preview.setSourceDocument(&doc);
+
+    QSignalSpy rendered(&preview, &MarkdownPreview::documentRendered);
+    preview.scheduleRender();
+    preview.scheduleRender();
+    preview.scheduleRender();
+    QTest::qWait(400); // interval is 250 ms
+    QCOMPARE(rendered.count(), 1);
 }
 
 void TestCore::matchCountingDoesNotNeedCaret()

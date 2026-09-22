@@ -4,7 +4,7 @@ A cross-platform desktop Markdown editor built with **Qt 6 Widgets (6.5+)** and 
 
 ## Features
 
-- **Split view**: raw Markdown editor (left) with live-rendered preview (right), updated on a 250 ms debounce
+- **Split view**: raw Markdown editor (left) with live-rendered preview (right), updated on a 250 ms throttle (at most one render per interval, anchored to the first keystroke)
 - **Syntax highlighting**: headings, bold, italic, strikethrough, inline code, fenced code blocks (block-state tracked), blockquotes, lists, links — block-based rehighlighting keeps 10k+ line documents responsive
 - **Formatting commands**: Bold (`Ctrl+B`), Italic (`Ctrl+I`), strikethrough, headings 1–3 / normal (`Ctrl+1..3`, `Ctrl+0`), link (`Ctrl+K`), inline code, fenced code block, blockquote, bulleted & numbered lists
 - **Editor conveniences**: line-number gutter, current-line highlight, list continuation on Enter, Tab/Shift-Tab indent of list/quote lines

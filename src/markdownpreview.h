@@ -6,9 +6,10 @@
 #include <QTextBrowser>
 #include <QTimer>
 
-// Rendered markdown pane. Renders on a short debounce instead of every
-// keystroke, restores the scroll ratio after each re-render, and resolves
-// relative image paths against the document directory.
+// Rendered markdown pane. Renders on a short throttle instead of every
+// keystroke (at most once per interval; the first keystroke of a burst
+// schedules the render), restores the scroll ratio after each re-render, and
+// resolves relative image paths against the document directory.
 class MarkdownPreview : public QTextBrowser
 {
     Q_OBJECT
@@ -16,11 +17,9 @@ class MarkdownPreview : public QTextBrowser
 public:
     explicit MarkdownPreview(QWidget *parent = nullptr);
 
-    // Queue a re-render; actual rendering happens after the debounce interval.
-    void setSourceMarkdown(const QString &markdown);
-
     // Live-source mode: renders pull the text from the document only when the
-    // debounce fires, so large documents are not copied on every keystroke.
+    // throttle fires, so large documents are not copied on every keystroke.
+    // Call setSourceDocument() once, then scheduleRender() on content changes.
     void setSourceDocument(QTextDocument *document);
     void scheduleRender();
 
@@ -31,7 +30,7 @@ public slots:
     // Programmatic scroll (from editor sync); does not emit scrollRatioChanged.
     void setScrollRatio(double ratio);
 
-    // Render immediately, ignoring the debounce (e.g. before HTML export).
+    // Render immediately, bypassing the throttle (e.g. before HTML export).
     void renderNow();
 
 signals:

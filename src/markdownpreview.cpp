@@ -24,18 +24,14 @@ MarkdownPreview::MarkdownPreview(QWidget *parent)
     });
 }
 
-void MarkdownPreview::setSourceMarkdown(const QString &markdown)
-{
-    m_sourceDocument.clear();
-    m_pendingMarkdown = markdown;
-    m_debounce.start();
-}
-
 void MarkdownPreview::setSourceDocument(QTextDocument *document)
 {
     m_sourceDocument = document;
 }
 
+// Throttled re-render: at most one render per interval, anchored to the first
+// request in a burst, so preview latency stays bounded without extending the
+// window on rapid typing.
 void MarkdownPreview::scheduleRender()
 {
     if (m_debounce.isActive())
@@ -50,7 +46,7 @@ void MarkdownPreview::setDocumentDirectory(const QString &dir)
 
 void MarkdownPreview::renderNow()
 {
-    m_debounce.stop();
+    m_debounce.stop(); // bypass the throttle entirely
     if (m_sourceDocument)
         m_pendingMarkdown = m_sourceDocument->toPlainText(); // pull once, lazily
     document()->setMarkdown(m_pendingMarkdown);

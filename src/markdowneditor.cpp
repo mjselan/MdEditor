@@ -274,15 +274,16 @@ void MarkdownEditor::forEachSelectedLine(
     if (replaced == joined)
         return;
 
-    // Cap the replacement at the last *content* character of the final block so
-    // a selection ending on (or at the start of) an empty block never swallows
-    // the following separator or the text after it.
+    // Always replace through the end of the last affected block (exclusive of
+    // its separator). Never cap at the selection end: the transformed text
+    // spans whole lines, so a shorter range would duplicate the unselected tail
+    // of the final line. The per-line transform keeps one separator per line,
+    // so the separator itself is never consumed and trailing blocks survive.
     const int lastContentEnd = last.position() + last.length() - 1; // exclusive
-    const int replaceEnd = qMin(to, lastContentEnd);
 
     cursor.beginEditBlock();
     cursor.setPosition(first.position());
-    cursor.setPosition(replaceEnd, QTextCursor::KeepAnchor);
+    cursor.setPosition(lastContentEnd, QTextCursor::KeepAnchor);
     cursor.insertText(replaced);
     cursor.endEditBlock();
 

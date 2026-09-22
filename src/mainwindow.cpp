@@ -21,6 +21,7 @@
 #include <QMessageBox>
 #include <QMimeData>
 #include <QPrinter>
+#include <QPrintDialog>
 #include <QRegularExpression>
 #include <QSaveFile>
 #include <QScrollBar>
@@ -150,6 +151,10 @@ void MainWindow::createActions()
     m_actionExportPdf = new QAction(tr("Export &PDF..."), this);
     connect(m_actionExportPdf, &QAction::triggered, this, &MainWindow::exportPdf);
 
+    m_actionPrint = new QAction(tr("&Print..."), this);
+    m_actionPrint->setShortcut(QKeySequence::Print);
+    connect(m_actionPrint, &QAction::triggered, this, &MainWindow::printFile);
+
     m_actionQuit = new QAction(tr("E&xit"), this);
     m_actionQuit->setShortcut(QKeySequence::Quit);
     connect(m_actionQuit, &QAction::triggered, this, &MainWindow::close);
@@ -219,6 +224,8 @@ void MainWindow::createMenus()
     fileMenu->addSeparator();
     fileMenu->addAction(m_actionExportHtml);
     fileMenu->addAction(m_actionExportPdf);
+    fileMenu->addSeparator();
+    fileMenu->addAction(m_actionPrint);
     fileMenu->addSeparator();
     fileMenu->addAction(m_actionQuit);
     updateRecentMenu();
@@ -329,9 +336,6 @@ void MainWindow::connectSignals()
     connect(m_findBar, &FindReplaceBar::findNext, this, &MainWindow::findNext);
     connect(m_findBar, &FindReplaceBar::searchTextChanged, this, &MainWindow::countMatches);
     connect(m_findBar, &FindReplaceBar::replaceCurrent, this, &MainWindow::replaceCurrent);
-    connect(m_findBar, &FindReplaceBar::replaceCurrent, this, [this] {
-        m_countTimer.start(); // keep the count fresh after a replacement
-    });
     connect(m_findBar, &FindReplaceBar::replaceAll, this, &MainWindow::replaceAll);
 
     connect(m_editor, &MarkdownEditor::imagePasted, this, &MainWindow::onImagePasted);
@@ -493,8 +497,20 @@ void MainWindow::exportPdf()
     QPrinter printer(QPrinter::HighResolution);
     printer.setOutputFormat(QPrinter::PdfFormat);
     printer.setOutputFileName(path);
-    m_editor->document()->print(&printer);
+    m_preview->renderNow(); // ensure the rendered copy is current
+    m_preview->document()->print(&printer);
     statusBar()->showMessage(tr("Exported to %1").arg(path), 4000);
+}
+
+void MainWindow::printFile()
+{
+    QPrinter printer(QPrinter::HighResolution);
+    QPrintDialog dialog(&printer, this);
+    dialog.setWindowTitle(tr("Print Document"));
+    if (dialog.exec() != QDialog::Accepted)
+        return;
+    m_preview->renderNow(); // ensure the rendered copy is current
+    m_preview->document()->print(&printer);
 }
 
 // ---------------------------------------------------------------------------
@@ -590,7 +606,6 @@ void MainWindow::findNext(const QString &text, bool matchCase, bool backward)
         return;
     }
     m_editor->setTextCursor(found);
-    m_findBar->setMatchCount(1); // at least one match exists
     countMatches(text, matchCase); // refresh the true total
 }
 
@@ -628,7 +643,7 @@ void MainWindow::replaceAll(const QString &findText, const QString &replaceText,
     }
     cursor.endEditBlock();
 
-    m_findBar->setMatchCount(count > 0 ? count : 0);
+    m_findBar->setMatchCount(qMax(0, count));
     statusBar()->showMessage(tr("Replaced %1 occurrence(s)").arg(count), 4000);
 }
 
