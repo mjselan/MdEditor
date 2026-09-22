@@ -249,12 +249,12 @@ void MarkdownEditor::forEachSelectedLine(
     const int to = qMax(from, cursor.selectionEnd());
 
     QTextBlock first = document()->findBlock(from);
-    QTextBlock last = document()->findBlock(to);
-    // A multi-line selection that ends at a block start does not include it.
-    if (cursor.hasSelection() && last.blockNumber() > first.blockNumber()
-        && to == last.position()) {
-        last = last.previous();
-    }
+    if (!first.isValid())
+        return;
+    // The last affected block is the one holding the final selected character.
+    QTextBlock last = document()->findBlock(qMax(from, to - 1));
+    if (!last.isValid())
+        last = document()->lastBlock();
 
     QStringList lines;
     for (QTextBlock b = first; b.isValid() && b.blockNumber() <= last.blockNumber();
@@ -262,21 +262,34 @@ void MarkdownEditor::forEachSelectedLine(
         lines << b.text();
     }
 
+    // The transform operates on one line at a time; joining/rejoining keeps the
+    // separator count identical, so document structure cannot shift.
+    QStringList replacedLines;
+    replacedLines.reserve(lines.size());
+    for (const QString &line : lines)
+        replacedLines << transform(line);
+
     const QString joined = lines.join(QLatin1Char('\n'));
-    const QString replaced = transform(joined);
+    const QString replaced = replacedLines.join(QLatin1Char('\n'));
     if (replaced == joined)
         return;
 
-    const int firstPos = first.position();
+    // Cap the replacement at the last *content* character of the final block so
+    // a selection ending on (or at the start of) an empty block never swallows
+    // the following separator or the text after it.
+    const int lastContentEnd = last.position() + last.length() - 1; // exclusive
+    const int replaceEnd = qMin(to, lastContentEnd);
+
     cursor.beginEditBlock();
-    cursor.setPosition(firstPos);
-    cursor.setPosition(last.position() + qMax(1, last.length() - 1), QTextCursor::KeepAnchor);
+    cursor.setPosition(first.position());
+    cursor.setPosition(replaceEnd, QTextCursor::KeepAnchor);
     cursor.insertText(replaced);
     cursor.endEditBlock();
 
     // Leave the cursor at the end of the first affected line.
     const int firstLineLength = replaced.section(QLatin1Char('\n'), 0, 0).size();
-    cursor.setPosition(qMin(firstPos + firstLineLength, document()->characterCount() - 1));
+    cursor.setPosition(qMin(first.position() + firstLineLength,
+                            document()->characterCount() - 1));
     setTextCursor(cursor);
 }
 
@@ -296,11 +309,11 @@ void MarkdownEditor::toggleFencedCodeBlock()
     const int to = qMax(from, cursor.selectionEnd());
 
     QTextBlock first = document()->findBlock(from);
-    QTextBlock last = document()->findBlock(to);
-    if (cursor.hasSelection() && last.blockNumber() > first.blockNumber()
-        && to == last.position()) {
-        last = last.previous();
-    }
+    if (!first.isValid())
+        return;
+    QTextBlock last = document()->findBlock(qMax(from, to - 1));
+    if (!last.isValid())
+        last = document()->lastBlock();
 
     static const QRegularExpression fence(QStringLiteral("^\\s*(```|~~~)\\s*$"));
     if (fence.match(first.text()).hasMatch() && fence.match(last.text()).hasMatch()) {
@@ -317,8 +330,11 @@ void MarkdownEditor::toggleFencedCodeBlock()
         return;
     }
 
+    // Insert the closing fence after the last block's content (before its
+    // separator), and the opening fence before the first block.
+    const int lastContentEnd = last.position() + qMax(0, last.length() - 1);
     cursor.beginEditBlock();
-    cursor.setPosition(last.position() + qMax(1, last.length() - 1));
+    cursor.setPosition(lastContentEnd);
     cursor.insertText(QStringLiteral("\n```"));
     cursor.setPosition(first.position());
     cursor.insertText(QStringLiteral("```\n"));
@@ -363,6 +379,10 @@ void MarkdownEditor::toggleBlockquote()
 {
     static const QRegularExpression quotePrefix(QStringLiteral("^\\s{0,3}>\\s?"));
     forEachSelectedLine([](const QString &line) {
+        // Empty lines get the prefix too so the block structure survives the
+        // selection-based rewrite (a skipped empty line would vanish).
+        if (line.trimmed().isEmpty())
+            return QStringLiteral("> ");
         return line.contains(quotePrefix) ? QString(line).remove(quotePrefix)
                                           : QStringLiteral("> ") + line;
     });
@@ -383,6 +403,8 @@ void MarkdownEditor::toggleNumberedList()
     int index = 0;
     forEachSelectedLine([&index](const QString &line) {
         ++index;
+        if (line.trimmed().isEmpty())
+            return QStringLiteral("1. "); // same rationale as toggleBlockquote
         if (line.contains(numberPrefix))
             return QString(line).remove(numberPrefix);
         return QStringLiteral("%1. %2").arg(index).arg(line);

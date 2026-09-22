@@ -42,8 +42,10 @@ FindReplaceBar::FindReplaceBar(QWidget *parent)
     layout->addWidget(m_replaceAllButton);
     layout->addWidget(m_status);
 
-    connect(m_find, &QLineEdit::textChanged, this,
-            [this](const QString &) { updateMatchCount(); });
+    connect(m_find, &QLineEdit::textChanged, this, [this](const QString &) {
+        emitSearchChanged();
+    });
+    connect(m_matchCase, &QCheckBox::toggled, this, [this](bool) { emitSearchChanged(); });
     connect(m_find, &QLineEdit::returnPressed, this, [this] { emitFind(false); });
     connect(findNext, &QPushButton::clicked, this, [this] { emitFind(false); });
     connect(findPrev, &QPushButton::clicked, this, [this] { emitFind(true); });
@@ -72,7 +74,7 @@ void FindReplaceBar::showForFind()
     raise();
     m_find->setFocus();
     m_find->selectAll();
-    updateMatchCount();
+    emitSearchChanged();
 }
 
 void FindReplaceBar::showForReplace()
@@ -84,7 +86,7 @@ void FindReplaceBar::showForReplace()
     raise();
     m_find->setFocus();
     m_find->selectAll();
-    updateMatchCount();
+    emitSearchChanged();
 }
 
 void FindReplaceBar::setMatchCount(int visibleCount)
@@ -120,7 +122,7 @@ void FindReplaceBar::emitFind(bool backward)
     emit findNext(m_find->text(), m_matchCase->isChecked(), backward);
 }
 
-void FindReplaceBar::updateMatchCount()
+void FindReplaceBar::emitSearchChanged()
 {
-    emit findNext(m_find->text(), m_matchCase->isChecked(), false);
+    emit searchTextChanged(m_find->text(), m_matchCase->isChecked());
 }

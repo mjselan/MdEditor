@@ -20,6 +20,8 @@ public:
 
 signals:
     void findNext(const QString &text, bool matchCase, bool backward);
+    // Emitted while the user types or toggles case; must NOT move the caret.
+    void searchTextChanged(const QString &text, bool matchCase);
     void replaceCurrent(const QString &findText, const QString &replaceText, bool matchCase);
     void replaceAll(const QString &findText, const QString &replaceText, bool matchCase);
 
@@ -33,7 +35,7 @@ protected:
 
 private:
     void emitFind(bool backward);
-    void updateMatchCount();
+    void emitSearchChanged();
 
     QLineEdit *m_find;
     QLineEdit *m_replace;

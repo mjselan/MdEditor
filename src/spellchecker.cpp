@@ -49,7 +49,7 @@ void SpellChecker::attachTo(QSyntaxHighlighter *highlighter)
 #ifdef FREEBUFF_HAVE_SONNET
     delete d->decorator;
     d->decorator = new Sonnet::SpellCheckDecorator(highlighter);
-    d->decorator->setActive(enabled());
+    d->decorator->setActive(d->enabled);
 #else
     Q_UNUSED(highlighter);
 #endif
@@ -107,7 +107,7 @@ void SpellChecker::setEnabled(bool enabled)
     d->enabled = enabled;
 #ifdef FREEBUFF_HAVE_SONNET
     if (d->decorator)
-        d->decorator->setActive(enabled());
+        d->decorator->setActive(enabled);
 #endif
     emit stateChanged();
 }

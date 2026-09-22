@@ -9,6 +9,7 @@
 
 class FindReplaceBar;
 class SpellChecker;
+class QTextDocument;
 class MarkdownEditor;
 class MarkdownHighlighter;
 class MarkdownPreview;
@@ -35,6 +36,11 @@ public:
     // Opens the given document; used for command-line file arguments.
     void openPathFromCommandLine(const QString &path);
 
+    // Counts occurrences of text in the document without touching any editor
+    // caret. Exposed statically for unit testing.
+    static int countMatchesInDocument(QTextDocument *document, const QString &text,
+                                      bool matchCase);
+
 protected:
     void closeEvent(QCloseEvent *event) override;
     void dragEnterEvent(QDragEnterEvent *event) override;
@@ -55,6 +61,7 @@ private slots:
     void onImagePasted(const QImage &image);
 
     void findNext(const QString &text, bool matchCase, bool backward);
+    void countMatches(const QString &text, bool matchCase);
     void replaceCurrent(const QString &findText, const QString &replaceText, bool matchCase);
     void replaceAll(const QString &findText, const QString &replaceText, bool matchCase);
     void onFindTriggered();

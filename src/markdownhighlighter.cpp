@@ -120,23 +120,37 @@ void MarkdownHighlighter::setColors(const QHash<QString, QColor> &colors)
     rehighlight();
 }
 
+namespace {
+
+// A closing fence must be bare (no info string), use the same marker
+// character, and be at least as long as the opening fence (CommonMark).
+bool isBareFenceClose(const QString &text, const MarkdownHighlighter::FenceInfo &open)
+{
+    static const QRegularExpression re(QStringLiteral("^\\s{0,3}(`{3,}|~{3,})\\s*$"));
+    const auto m = re.match(text);
+    if (!m.hasMatch())
+        return false;
+    const QString run = m.captured(1);
+    return run.at(0) == open.marker && run.size() >= open.length;
+}
+
+} // namespace
+
 void MarkdownHighlighter::highlightBlock(const QString &text)
 {
-    const bool inFence = previousBlockState() == StateFencedCode;
+    const FenceInfo open = decodeFenceState(previousBlockState());
 
-    if (inFence) {
-        // An identical fence run at the left margin closes the block.
-        if (isOpenFence(text)) {
-            setCurrentBlockState(StateNone);
-        } else {
-            setCurrentBlockState(StateFencedCode);
-        }
+    if (open.length > 0) {
+        // Inside a fenced block: only a matching bare fence closes it.
+        setCurrentBlockState(isBareFenceClose(text, open) ? StateNone
+                                                          : previousBlockState());
         setFormat(0, text.size(), m_formats.value(QStringLiteral("fencedCode")));
         return;
     }
 
-    if (isOpenFence(text)) {
-        setCurrentBlockState(StateFencedCode);
+    FenceInfo line;
+    if (isOpenFence(text, &line)) {
+        setCurrentBlockState(encodeFenceState(line));
         setFormat(0, text.size(), m_formats.value(QStringLiteral("fencedCode")));
         return;
     }
@@ -225,15 +239,37 @@ int MarkdownHighlighter::headingLevel(const QString &text, QString *title)
     return m.captured(1).size();
 }
 
-bool MarkdownHighlighter::isOpenFence(const QString &text, QChar *marker)
+bool MarkdownHighlighter::isOpenFence(const QString &text, FenceInfo *info)
 {
     static const QRegularExpression re(QStringLiteral("^\\s{0,3}(`{3,}|~{3,})"));
     const auto m = re.match(text);
     if (!m.hasMatch())
         return false;
-    if (marker)
-        *marker = m.captured(1).at(0);
+    if (info) {
+        info->marker = m.captured(1).at(0);
+        info->length = m.captured(1).size();
+    }
     return true;
+}
+
+int MarkdownHighlighter::encodeFenceState(const FenceInfo &info)
+{
+    if (info.length <= 0 || info.length > 63)
+        return StateNone;
+    const int markerBit = info.marker == QLatin1Char('~') ? 2 : 0;
+    return StateFencedCode | markerBit | (info.length << 2);
+}
+
+MarkdownHighlighter::FenceInfo MarkdownHighlighter::decodeFenceState(int state)
+{
+    FenceInfo info;
+    // previousBlockState() returns -1 before the first block; -1 & flags is
+    // truthy, so guard explicitly to avoid a phantom "inside a fence".
+    if (state <= StateNone || !(state & StateFencedCode))
+        return info;
+    info.length = (state >> 2) & 0x3F;
+    info.marker = (state & 2) ? QLatin1Char('~') : QLatin1Char('`');
+    return info;
 }
 
 QVector<QPair<int, QString>> MarkdownHighlighter::headings() const

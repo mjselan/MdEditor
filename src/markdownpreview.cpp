@@ -26,7 +26,20 @@ MarkdownPreview::MarkdownPreview(QWidget *parent)
 
 void MarkdownPreview::setSourceMarkdown(const QString &markdown)
 {
+    m_sourceDocument.clear();
     m_pendingMarkdown = markdown;
+    m_debounce.start();
+}
+
+void MarkdownPreview::setSourceDocument(QTextDocument *document)
+{
+    m_sourceDocument = document;
+}
+
+void MarkdownPreview::scheduleRender()
+{
+    if (m_debounce.isActive())
+        return; // already pending; keep the original deadline
     m_debounce.start();
 }
 
@@ -38,6 +51,8 @@ void MarkdownPreview::setDocumentDirectory(const QString &dir)
 void MarkdownPreview::renderNow()
 {
     m_debounce.stop();
+    if (m_sourceDocument)
+        m_pendingMarkdown = m_sourceDocument->toPlainText(); // pull once, lazily
     document()->setMarkdown(m_pendingMarkdown);
     emit documentRendered();
     // setMarkdown() resets scrolling; restore the previous position silently.

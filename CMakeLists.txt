@@ -12,7 +12,7 @@ set(CMAKE_AUTOMOC ON)
 set(CMAKE_AUTOUIC ON)
 set(CMAKE_AUTORCC ON)
 
-find_package(Qt6 6.5 REQUIRED COMPONENTS Core Gui Widgets PrintSupport Test)
+find_package(Qt6 6.5 REQUIRED COMPONENTS Core Gui Widgets PrintSupport)
 
 qt_standard_project_setup()
 
@@ -63,18 +63,30 @@ endif()
 # --- Tests -------------------------------------------------------------------
 include(CTest)
 if(BUILD_TESTING)
+    find_package(Qt6 6.5 REQUIRED COMPONENTS Test)
     qt_add_executable(test_core tests/test_core.cpp
+        src/markdowneditor.cpp
+        src/markdowneditor.h
         src/markdownhighlighter.cpp
         src/markdownhighlighter.h
+        src/markdownpreview.cpp
+        src/markdownpreview.h
+        src/mainwindow.cpp
+        src/mainwindow.h
+        src/outlinepanel.cpp
+        src/outlinepanel.h
         src/findreplacebar.cpp
         src/findreplacebar.h
         src/theme.cpp
-        src/theme.h)
+        src/theme.h
+        src/spellchecker.cpp
+        src/spellchecker.h)
     target_include_directories(test_core PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/src)
     target_link_libraries(test_core PRIVATE
         Qt6::Core
         Qt6::Gui
         Qt6::Widgets
+        Qt6::PrintSupport
         Qt6::Test)
     add_test(NAME test_core COMMAND test_core)
 endif()

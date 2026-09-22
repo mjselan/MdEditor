@@ -88,6 +88,7 @@ void MainWindow::createWidgets()
 {
     m_editor = new MarkdownEditor(this);
     m_preview = new MarkdownPreview(this);
+    m_preview->setSourceDocument(m_editor->document()); // live lazy rendering
     m_outline = new OutlinePanel(this);
     m_findBar = new FindReplaceBar(this);
     m_highlighter = new MarkdownHighlighter(m_editor->document());
@@ -326,7 +327,11 @@ void MainWindow::connectSignals()
     connect(&m_autosaveTimer, &QTimer::timeout, this, &MainWindow::writeRecoveryFile);
 
     connect(m_findBar, &FindReplaceBar::findNext, this, &MainWindow::findNext);
+    connect(m_findBar, &FindReplaceBar::searchTextChanged, this, &MainWindow::countMatches);
     connect(m_findBar, &FindReplaceBar::replaceCurrent, this, &MainWindow::replaceCurrent);
+    connect(m_findBar, &FindReplaceBar::replaceCurrent, this, [this] {
+        m_countTimer.start(); // keep the count fresh after a replacement
+    });
     connect(m_findBar, &FindReplaceBar::replaceAll, this, &MainWindow::replaceAll);
 
     connect(m_editor, &MarkdownEditor::imagePasted, this, &MainWindow::onImagePasted);
@@ -467,7 +472,10 @@ void MainWindow::exportHtml()
                              tr("Cannot write %1:\n%2").arg(path, file.errorString()));
         return;
     }
-    file.write(m_editor->document()->toHtml().toUtf8());
+    // Export the rendered document (the preview holds the markdown-rendered
+    // copy); the editor document contains raw markdown source.
+    m_preview->renderNow(); // ensure the rendered copy is current
+    file.write(m_preview->document()->toHtml().toUtf8());
     file.close();
     statusBar()->showMessage(tr("Exported to %1").arg(path), 4000);
 }
@@ -498,7 +506,7 @@ void MainWindow::onTextChanged()
     setWindowModified(m_editor->document()->isModified());
     m_countTimer.start();
     m_outlineTimer.start();
-    m_preview->setSourceMarkdown(m_editor->toPlainText());
+    m_preview->scheduleRender(); // pulls toPlainText() lazily in renderNow()
 }
 
 void MainWindow::onCursorPositionChanged()
@@ -525,6 +533,39 @@ void MainWindow::onPreviewScrolled(double ratio)
 // Find & replace
 // ---------------------------------------------------------------------------
 
+int MainWindow::countMatchesInDocument(QTextDocument *document, const QString &text,
+                                       bool matchCase)
+{
+    if (!document || text.isEmpty())
+        return 0;
+
+    QTextDocument::FindFlags flags;
+    if (matchCase)
+        flags |= QTextDocument::FindCaseSensitively;
+
+    QTextCursor probe(document);
+    probe.movePosition(QTextCursor::Start);
+
+    int count = 0;
+    while (true) {
+        probe = document->find(text, probe, flags);
+        if (probe.isNull())
+            break;
+        ++count;
+        if (count >= 10000) // safety bound for huge documents
+            break;
+    }
+    return count;
+}
+
+void MainWindow::countMatches(const QString &text, bool matchCase)
+{
+    // The helper navigates a private cursor only, so the editor caret never
+    // moves while the user types in the find box.
+    m_findBar->setMatchCount(
+        countMatchesInDocument(m_editor->document(), text, matchCase));
+}
+
 void MainWindow::findNext(const QString &text, bool matchCase, bool backward)
 {
     if (text.isEmpty()) {
@@ -550,6 +591,7 @@ void MainWindow::findNext(const QString &text, bool matchCase, bool backward)
     }
     m_editor->setTextCursor(found);
     m_findBar->setMatchCount(1); // at least one match exists
+    countMatches(text, matchCase); // refresh the true total
 }
 
 void MainWindow::replaceCurrent(const QString &findText, const QString &replaceText,
@@ -801,7 +843,10 @@ void MainWindow::attemptRecoveryLoad()
 
     const QJsonObject root = doc.object();
     m_editor->setPlainText(root.value(QStringLiteral("content")).toString());
-    setCurrentFile(root.value(QStringLiteral("path")).toString());
+    const QString path = root.value(QStringLiteral("path")).toString();
+    setCurrentFile(path);
+    if (!path.isEmpty())
+        m_preview->setDocumentDirectory(QFileInfo(path).absolutePath());
     setWindowModified(true);
     updateCounts();
     rebuildOutline();

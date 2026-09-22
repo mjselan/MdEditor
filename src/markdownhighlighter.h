@@ -17,10 +17,23 @@ class MarkdownHighlighter : public QSyntaxHighlighter
     Q_OBJECT
 
 public:
+    // Block states: StateNone, or StateFencedCode combined with the opening
+    // fence's marker character and length (CommonMark: a fence is closed by a
+    // run of the SAME character with length >= the opening length).
     enum BlockState {
         StateNone = 0,
         StateFencedCode = 1,
     };
+
+    // Details of a fence delimiter line.
+    struct FenceInfo
+    {
+        QChar marker{ '`' };
+        int length = 0; // 0 == not a fence
+    };
+
+    static int encodeFenceState(const FenceInfo &info);
+    static FenceInfo decodeFenceState(int state);
 
     explicit MarkdownHighlighter(QTextDocument *document);
 
@@ -31,7 +44,7 @@ public:
 
     // Static parsing helpers shared with the outline panel and tests.
     static int headingLevel(const QString &text, QString *title = nullptr);
-    static bool isOpenFence(const QString &text, QChar *marker = nullptr);
+    static bool isOpenFence(const QString &text, FenceInfo *info = nullptr);
 
 protected:
     void highlightBlock(const QString &text) override;
