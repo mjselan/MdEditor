@@ -21,8 +21,7 @@ find_package(Qt6 6.5 REQUIRED COMPONENTS Core Gui Widgets PrintSupport)
 
 qt_standard_project_setup()
 
-set(EDITOR_SOURCES
-    src/main.cpp
+set(CORE_SOURCES
     src/mainwindow.cpp
     src/markdowneditor.cpp
     src/markdownhighlighter.cpp
@@ -33,7 +32,7 @@ set(EDITOR_SOURCES
     src/spellchecker.cpp
     src/appicons.cpp)
 
-set(EDITOR_HEADERS
+set(CORE_HEADERS
     src/mainwindow.h
     src/markdowneditor.h
     src/markdownhighlighter.h
@@ -43,9 +42,19 @@ set(EDITOR_HEADERS
     src/theme.h
     src/spellchecker.h)
 
-qt_add_executable(markdowneditor WIN32
-    ${EDITOR_SOURCES}
-    ${EDITOR_HEADERS})
+# Everything except main() lives in a static library so the application
+# and the test suite share one compilation instead of building every
+# source file twice.
+add_library(mdeditor_core STATIC ${CORE_SOURCES} ${CORE_HEADERS})
+target_include_directories(mdeditor_core PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/src)
+target_link_libraries(mdeditor_core PUBLIC
+    Qt6::Core
+    Qt6::Gui
+    Qt6::Widgets
+    Qt6::PrintSupport)
+
+qt_add_executable(markdowneditor WIN32 src/main.cpp)
+target_link_libraries(markdowneditor PRIVATE mdeditor_core)
 
 # A macOS build must be a real application bundle, rather than a bare
 # executable.  Qt's deployment tools (macdeployqt and the Installer Framework)
@@ -64,13 +73,6 @@ if(APPLE)
     # launched from the build directory.  Installer/MacOS/macdeploy.sh lets
     # macdeployqt rewrite the staged copy to use its bundled Frameworks.
 endif()
-
-target_include_directories(markdowneditor PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/src)
-target_link_libraries(markdowneditor PRIVATE
-    Qt6::Core
-    Qt6::Gui
-    Qt6::Widgets
-    Qt6::PrintSupport)
 
 # --- Application icon (Windows shell embedding) ------------------------------
 # The icon artwork is painted in code (src/appicons.cpp). The makeico tool
@@ -140,13 +142,25 @@ endif()
 # When Sonnet is not installed the editor builds and runs normally with
 # spell check disabled; no other functionality is affected.
 #
+# MARKDOWNEDITOR_SPELLCHECK controls the backend: AUTO (default) uses Sonnet
+# when found, ON makes a missing Sonnet a configure error (for packagers),
+# OFF skips detection entirely.
+#
 # A full KF6 Sonnet + static hunspell stack lives in build/prefix (built by
-# build\hunspell-cl.bat + build\deps-sonnet.bat on Windows, or the matching
-# native cmake invocations on Linux). When that prefix exists it is searched
-# first -- either the plain lib/ layout or the multi-arch
-# lib/<triplet>/ layout -- otherwise a system KF6Sonnet is used if present.
-# The Windows DLL copy steps below are deliberately limited to WIN32; on
-# other platforms the build-tree RPATH covers the prefix libraries.
+# tools\windows\hunspell-cl.bat + tools\windows\deps-sonnet.bat on Windows,
+# or the matching native cmake invocations on Linux). When that prefix
+# exists it is searched first -- either the plain lib/ layout or the
+# multi-arch lib/<triplet>/ layout -- otherwise a system KF6Sonnet is used
+# if present. The Windows DLL copy steps below are deliberately limited to
+# WIN32; on other platforms the build-tree RPATH covers the prefix
+# libraries.
+set(MARKDOWNEDITOR_SPELLCHECK "AUTO" CACHE STRING
+    "Sonnet spell check backend: AUTO, ON or OFF")
+set_property(CACHE MARKDOWNEDITOR_SPELLCHECK PROPERTY STRINGS AUTO ON OFF)
+if(NOT MARKDOWNEDITOR_SPELLCHECK MATCHES "^(AUTO|ON|OFF)$")
+    message(FATAL_ERROR "MARKDOWNEDITOR_SPELLCHECK must be AUTO, ON or OFF")
+endif()
+
 if(NOT MARKDOWNEDITOR_SONNET_PREFIX)
     foreach(_sonnet_cmake_dir
             "${CMAKE_CURRENT_SOURCE_DIR}/build/prefix/lib/cmake/KF6Sonnet"
@@ -157,48 +171,49 @@ if(NOT MARKDOWNEDITOR_SONNET_PREFIX)
         endif()
     endforeach()
 endif()
-
-set(MARKDOWNEDITOR_SONNET_SEARCH "")
 if(MARKDOWNEDITOR_SONNET_PREFIX)
-    list(APPEND MARKDOWNEDITOR_SONNET_SEARCH
-        "${MARKDOWNEDITOR_SONNET_PREFIX}/lib/cmake/KF6Sonnet"
-        "${MARKDOWNEDITOR_SONNET_PREFIX}/lib/x86_64-linux-gnu/cmake/KF6Sonnet")
+    list(PREPEND CMAKE_PREFIX_PATH "${MARKDOWNEDITOR_SONNET_PREFIX}")
 endif()
 
-find_package(KF6Sonnet QUIET COMPONENTS SonnetUi SonnetCore
-    PATHS ${MARKDOWNEDITOR_SONNET_SEARCH}
-    NO_DEFAULT_PATH)
-if(NOT KF6Sonnet_FOUND)
+if(MARKDOWNEDITOR_SPELLCHECK STREQUAL "OFF")
+    set(KF6Sonnet_FOUND FALSE)
+else()
     find_package(KF6Sonnet QUIET COMPONENTS SonnetUi SonnetCore)
+    if(MARKDOWNEDITOR_SPELLCHECK STREQUAL "ON" AND NOT KF6Sonnet_FOUND)
+        message(FATAL_ERROR "MARKDOWNEDITOR_SPELLCHECK=ON but KF6Sonnet was not found")
+    endif()
 endif()
+
+# Copies the Windows Sonnet runtime next to a consuming executable. Layout
+# matches Sonnet's search paths: client plugins load from
+# <exeDir>/kf6/sonnet and dictionaries resolve via the baked
+# SONNET_INSTALL_PREFIX (build/prefix/bin/data/hunspell). The macOS bundle
+# has a different dylib/plugin layout and is validated by
+# Installer/MacOS/macdeploy.sh rather than copying DLLs here.
+function(mdeditor_copy_sonnet_runtime target)
+    if(NOT (KF6Sonnet_FOUND AND MARKDOWNEDITOR_SONNET_PREFIX AND WIN32))
+        return()
+    endif()
+    foreach(_sonnet_dll KF6SonnetCore.dll KF6SonnetUi.dll)
+        add_custom_command(TARGET ${target} POST_BUILD
+            COMMAND ${CMAKE_COMMAND} -E copy_if_different
+                "${MARKDOWNEDITOR_SONNET_PREFIX}/bin/${_sonnet_dll}"
+                $<TARGET_FILE_DIR:${target}>)
+    endforeach()
+    add_custom_command(TARGET ${target} POST_BUILD
+        COMMAND ${CMAKE_COMMAND} -E copy_if_different
+            "${MARKDOWNEDITOR_SONNET_PREFIX}/lib/plugins/kf6/sonnet/sonnet_hunspell.dll"
+            "$<TARGET_FILE_DIR:${target}>/kf6/sonnet/sonnet_hunspell.dll")
+endfunction()
 
 if(KF6Sonnet_FOUND)
-    target_link_libraries(markdowneditor PRIVATE KF6::SonnetUi KF6::SonnetCore)
-    target_compile_definitions(markdowneditor PRIVATE MARKDOWNEDITOR_HAVE_SONNET)
-    if(MARKDOWNEDITOR_SONNET_PREFIX)
-        # Runtime layout for the self-contained Windows prefix: Loader
-        # searches QCoreApplication::libraryPaths() + "/kf6/sonnet" (the exe
-        # dir), and dictionary data is found via the baked
-        # SONNET_INSTALL_PREFIX (build/prefix/bin/data/hunspell). The macOS
-        # bundle has a different dylib/plugin layout and is validated by
-        # Installer/MacOS/macdeploy.sh rather than copying Windows DLLs here.
-        if(WIN32)
-            foreach(_sonnet_dll KF6SonnetCore.dll KF6SonnetUi.dll)
-                add_custom_command(TARGET markdowneditor POST_BUILD
-                    COMMAND ${CMAKE_COMMAND} -E copy_if_different
-                        "${MARKDOWNEDITOR_SONNET_PREFIX}/bin/${_sonnet_dll}"
-                        $<TARGET_FILE_DIR:markdowneditor>)
-            endforeach()
-            add_custom_command(TARGET markdowneditor POST_BUILD
-                COMMAND ${CMAKE_COMMAND} -E copy_if_different
-                    "${MARKDOWNEDITOR_SONNET_PREFIX}/lib/plugins/kf6/sonnet/sonnet_hunspell.dll"
-                    "$<TARGET_FILE_DIR:markdowneditor>/kf6/sonnet/sonnet_hunspell.dll")
-        endif()
-    endif()
+    target_link_libraries(mdeditor_core PUBLIC KF6::SonnetUi KF6::SonnetCore)
+    target_compile_definitions(mdeditor_core PUBLIC MARKDOWNEDITOR_HAVE_SONNET)
     message(STATUS "Sonnet found - spell check enabled")
 else()
     message(STATUS "Sonnet not found - building without spell check")
 endif()
+mdeditor_copy_sonnet_runtime(markdowneditor)
 
 # --- Tests -------------------------------------------------------------------
 # Only when built standalone: include(CTest) defines BUILD_TESTING defaulting
@@ -209,52 +224,27 @@ if(PROJECT_IS_TOP_LEVEL)
 endif()
 if(BUILD_TESTING)
     find_package(Qt6 6.5 REQUIRED COMPONENTS Test)
-    qt_add_executable(test_core tests/test_core.cpp
-        src/markdowneditor.cpp
-        src/markdowneditor.h
-        src/markdownhighlighter.cpp
-        src/markdownhighlighter.h
-        src/markdownpreview.cpp
-        src/markdownpreview.h
-        src/mainwindow.cpp
-        src/mainwindow.h
-        src/outlinepanel.cpp
-        src/outlinepanel.h
-        src/findreplacebar.cpp
-        src/findreplacebar.h
-        src/theme.cpp
-        src/theme.h
-        src/spellchecker.cpp
-        src/spellchecker.h
-        src/appicons.cpp
-        src/appicons.h)
-    target_include_directories(test_core PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/src)
-    target_link_libraries(test_core PRIVATE
-        Qt6::Core
-        Qt6::Gui
-        Qt6::Widgets
-        Qt6::PrintSupport
-        Qt6::Test)
-    # Mirror the optional Sonnet backend so the enabled code path is covered
-    # by CI wherever Sonnet is installed.
-    if(KF6Sonnet_FOUND)
-        target_link_libraries(test_core PRIVATE KF6::SonnetUi KF6::SonnetCore)
-        target_compile_definitions(test_core PRIVATE MARKDOWNEDITOR_HAVE_SONNET)
-        if(MARKDOWNEDITOR_SONNET_PREFIX AND WIN32)
-            foreach(_sonnet_dll KF6SonnetCore.dll KF6SonnetUi.dll)
-                add_custom_command(TARGET test_core POST_BUILD
-                    COMMAND ${CMAKE_COMMAND} -E copy_if_different
-                        "${MARKDOWNEDITOR_SONNET_PREFIX}/bin/${_sonnet_dll}"
-                        $<TARGET_FILE_DIR:test_core>)
-            endforeach()
-            add_custom_command(TARGET test_core POST_BUILD
-                COMMAND ${CMAKE_COMMAND} -E copy_if_different
-                    "${MARKDOWNEDITOR_SONNET_PREFIX}/lib/plugins/kf6/sonnet/sonnet_hunspell.dll"
-                    "$<TARGET_FILE_DIR:test_core>/kf6/sonnet/sonnet_hunspell.dll")
-        endif()
-    endif()
+    qt_add_executable(test_core tests/test_core.cpp)
+    target_link_libraries(test_core PRIVATE mdeditor_core Qt6::Test)
+    # The Sonnet backend (link + define) comes transitively from
+    # mdeditor_core; only the Windows runtime DLLs need a per-executable
+    # copy step.
+    mdeditor_copy_sonnet_runtime(test_core)
     add_test(NAME test_core COMMAND test_core)
     # The suite instantiates widgets; force a headless platform so it also
     # passes on CI runners and servers without a display.
     set_tests_properties(test_core PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen")
+endif()
+
+# --- Install rules (distro packagers, Flatpak, AppImage) --------------------
+include(GNUInstallDirs)
+install(TARGETS markdowneditor
+    RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR}
+    BUNDLE DESTINATION .)
+if(UNIX AND NOT APPLE)
+    install(FILES "${CMAKE_CURRENT_SOURCE_DIR}/Installer/Linux/markdowneditor.desktop"
+        DESTINATION ${CMAKE_INSTALL_DATAROOTDIR}/applications)
+    install(FILES "${CMAKE_CURRENT_SOURCE_DIR}/Installer/Linux/markdowneditor.png"
+        DESTINATION ${CMAKE_INSTALL_DATAROOTDIR}/icons/hicolor/256x256/apps
+        RENAME markdowneditor.png)
 endif()
