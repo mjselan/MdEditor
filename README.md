@@ -237,7 +237,7 @@ bundled `markdowneditor.png` icon. Silent/automated install:
 
 ```bash
 ./Installer/Linux/MarkdownEditor-1.0.0-offline.run install \
-  --default-answer --confirm-command TargetDir=$HOME/MarkdownEditor
+  --accept-licenses --default-answer --confirm-command TargetDir=$HOME/MarkdownEditor
 ```
 
 ### What `linuxdeploy.sh` stages
@@ -301,6 +301,7 @@ Installer/
   Windows/
     config/config.xml   Windows Qt IFW configuration
     packages/com.mdeditor.markdowneditor/
+      meta/             Windows package metadata, shortcuts, GPL text
       meta/             Windows package metadata and shortcuts
       data/             windeploy payload (gitignored)
     windeploy.bat       Windows Release build + staging
@@ -308,6 +309,7 @@ Installer/
   MacOS/
     config/config.xml   macOS Qt IFW configuration
     packages/com.mdeditor.markdowneditor/
+      meta/             macOS package metadata, GPL text
       meta/             macOS package metadata
       data/             macdeploy payload (gitignored)
     macdeploy.sh        macOS Release build + .app staging
@@ -315,6 +317,7 @@ Installer/
   Linux/
     config/config.xml   Linux Qt IFW configuration
     packages/com.mdeditor.markdowneditor/
+      meta/             Linux package metadata, desktop entry, GPL text
       meta/             Linux package metadata + desktop entry
       data/             linuxdeploy payload (gitignored)
     linuxdeploy.sh      Linux Release build + Qt bundling (ldd/patchelf)
@@ -338,3 +341,7 @@ tests/
 ## Configuration
 
 Settings persist via `QSettings` (org `MdEditor`, app `MarkdownEditor`): window geometry, theme mode, editor font, outline visibility, recent files. Autosave/recovery files live under `QStandardPaths::AppLocalDataLocation` (e.g. `%LOCALAPPDATA%\MdEditor\MarkdownEditor` on Windows).
+
+## License
+
+Markdown Editor is free software licensed under the **GNU General Public License v3 or later** — see [LICENSE.md](LICENSE.md). The Windows, macOS, and Linux installers present the same license for acceptance during setup.

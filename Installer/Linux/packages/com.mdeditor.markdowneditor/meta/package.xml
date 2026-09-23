@@ -4,6 +4,9 @@
     <Description>Markdown Editor application and bundled Qt runtime for Ubuntu 24.04 and later. Optional spell-check data is included when available.</Description>
     <Version>1.0.0</Version>
     <ReleaseDate>2026-09-23</ReleaseDate>
+    <Licenses>
+        <License name="GNU General Public License v3 (Markdown Editor)" file="gpl-3.0.txt" />
+    </Licenses>
     <Name>com.mdeditor.markdowneditor</Name>
     <Dependencies></Dependencies>
     <ForcedInstallation>true</ForcedInstallation>
