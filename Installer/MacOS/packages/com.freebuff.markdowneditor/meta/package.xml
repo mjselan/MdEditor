@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <Package>
     <DisplayName>Freebuff Markdown Editor</DisplayName>
-    <Description>Freebuff Markdown Editor application, Qt runtime, spell-check backend and English dictionary.</Description>
+    <Description>Freebuff Markdown Editor macOS application bundle and bundled Qt runtime. Optional spell-check data is included when available.</Description>
     <Version>1.0.0</Version>
     <ReleaseDate>2026-09-22</ReleaseDate>
     <Name>com.freebuff.markdowneditor</Name>

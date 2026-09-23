@@ -9,15 +9,15 @@ rem 3. Adds the MSVC C runtime DLLs (no vc_redist.exe dependency).
 rem 4. Adds the optional Sonnet spell-check stack (client plugin + dictionaries)
 rem    from build\prefix when it was built there.
 rem
-rem Usage:  devcmd.bat installer\windeploy.bat
-rem Output: installer\packages\com.freebuff.markdowneditor\data
+rem Usage:  devcmd.bat Installer\Windows\windeploy.bat
+rem Output: Installer\Windows\packages\com.freebuff.markdowneditor\data
 rem ============================================================================
 setlocal EnableExtensions
 
-rem --- Locate the repo root (parent of this script's directory) ---------------
+rem --- Locate the repo root (two levels above this script) --------------------
 set "SCRIPT_DIR=%~dp0"
-for %%I in ("%SCRIPT_DIR%..") do set "REPO_ROOT=%%~fI"
-set "PKG=%REPO_ROOT%\installer\packages\com.freebuff.markdowneditor"
+for %%I in ("%SCRIPT_DIR%..\..") do set "REPO_ROOT=%%~fI"
+set "PKG=%REPO_ROOT%\Installer\Windows\packages\com.freebuff.markdowneditor"
 set "DATA=%PKG%\data"
 set "QT_DIR=C:\Qt\6.11.1\msvc2022_64"
 set "IFW_BIN=C:\Qt\Tools\QtInstallerFramework\4.11\bin"
@@ -99,7 +99,7 @@ echo Deploy tree staged at:
 echo   %DATA%
 echo   (DLLs, plugins, translation-free Qt runtime, CRT, dictionaries)
 echo.
-echo Next: devcmd.bat installer\make-installer.bat
+echo Next: devcmd.bat Installer\Windows\make-installer.bat
 exit /b 0
 
 :fail

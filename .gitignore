@@ -65,10 +65,14 @@ Desktop.ini
 # Local temp / scratch
 tmp/
 
-# Generated application icon (makeico tool; regenerate via the app_icon target)
+# Generated application icons (regenerate via the app_icon target)
 resources/app.ico
+resources/*.icns
 
-# Qt IFW installer: keep config/meta sources; ignore deployed payload + outputs
-Installer/packages/*/data/
-Installer/*.exe
+# Qt IFW installer: keep config/meta sources; ignore platform payloads + outputs
+Installer/Windows/packages/*/data/
+Installer/MacOS/packages/*/data/
+Installer/Windows/*.exe
+Installer/MacOS/*.dmg
+Installer/MacOS/*.app
 InstallationLog.txt

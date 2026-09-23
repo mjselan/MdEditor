@@ -42,6 +42,24 @@ qt_add_executable(markdowneditor WIN32
     ${EDITOR_SOURCES}
     ${EDITOR_HEADERS})
 
+# A macOS build must be a real application bundle, rather than a bare
+# executable.  Qt's deployment tools (macdeployqt and the Installer Framework)
+# expect the Contents/MacOS layout and will otherwise either reject the input
+# or produce an installer that macOS cannot launch normally.
+if(APPLE)
+    set_target_properties(markdowneditor PROPERTIES
+        MACOSX_BUNDLE TRUE
+        OUTPUT_NAME "FreebuffMarkdownEditor"
+        MACOSX_BUNDLE_BUNDLE_NAME "Freebuff Markdown Editor"
+        MACOSX_BUNDLE_GUI_IDENTIFIER "com.freebuff.markdowneditor"
+        MACOSX_BUNDLE_SHORT_VERSION_STRING "${PROJECT_VERSION}"
+        MACOSX_BUNDLE_BUNDLE_VERSION "${PROJECT_VERSION}"
+        MACOSX_BUNDLE_COPYRIGHT "Copyright (C) Freebuff")
+    # Keep Qt's normal build-tree runtime path so the freshly built app can be
+    # launched from the build directory.  Installer/MacOS/macdeploy.sh lets
+    # macdeployqt rewrite the staged copy to use its bundled Frameworks.
+endif()
+
 target_include_directories(markdowneditor PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/src)
 target_link_libraries(markdowneditor PRIVATE
     Qt6::Core
@@ -81,14 +99,47 @@ if(WIN32)
         OBJECT_DEPENDS "${FREEBUFF_APP_ICO}")
 endif()
 
+# --- Application icon (macOS bundle metadata) --------------------------------
+# The artwork is generated from the same C++ painter used by the runtime
+# window icon.  A .icns is needed in the bundle for Finder/Dock/Launchpad;
+# setting only QApplication::windowIcon() does not provide that metadata.
+if(APPLE)
+    add_executable(tool_makeicns tools/makeicns/main.cpp src/appicons.cpp)
+    target_include_directories(tool_makeicns PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/src)
+    target_link_libraries(tool_makeicns PRIVATE Qt6::Gui)
+    set_target_properties(tool_makeicns PROPERTIES
+        MACOSX_BUNDLE OFF
+        WIN32_EXECUTABLE OFF)
+
+    set(FREEBUFF_APP_ICNS
+        "${CMAKE_CURRENT_SOURCE_DIR}/resources/FreebuffMarkdownEditor.icns")
+    add_custom_command(
+        OUTPUT "${FREEBUFF_APP_ICNS}"
+        COMMAND ${CMAKE_COMMAND} -E env
+            "QT_QPA_PLATFORM=offscreen"
+            $<TARGET_FILE:tool_makeicns> "${FREEBUFF_APP_ICNS}"
+        DEPENDS tool_makeicns tools/makeicns/main.cpp src/appicons.cpp src/appicons.h
+        COMMENT "Generating resources/FreebuffMarkdownEditor.icns")
+    add_custom_target(app_icon DEPENDS "${FREEBUFF_APP_ICNS}")
+    add_dependencies(markdowneditor app_icon)
+    set_source_files_properties("${FREEBUFF_APP_ICNS}" PROPERTIES
+        MACOSX_PACKAGE_LOCATION "Resources")
+    target_sources(markdowneditor PRIVATE "${FREEBUFF_APP_ICNS}")
+    set_target_properties(markdowneditor PROPERTIES
+        MACOSX_BUNDLE_ICON_FILE "FreebuffMarkdownEditor.icns")
+endif()
+
 # --- Optional spell check via KDE Frameworks Sonnet -------------------------
 # When Sonnet is not installed the editor builds and runs normally with
 # spell check disabled; no other functionality is affected.
 #
 # A full KF6 Sonnet + static hunspell stack lives in build/prefix (built by
-# build\hunspell-cl.bat + build\deps-sonnet.bat). When that prefix exists it
-# is searched first; otherwise a system KF6Sonnet is used if present.
-if(NOT FREEBUFF_SONNET_PREFIX AND EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/build/prefix/lib/cmake/KF6Sonnet")
+# build\hunspell-cl.bat + build\deps-sonnet.bat) for Windows packaging. When
+# that prefix exists it is searched first; otherwise a system KF6Sonnet is
+# used if present. A non-Windows prefix must provide a matching native layout;
+# the Windows DLL copy steps below are deliberately limited to WIN32.
+if(WIN32 AND NOT FREEBUFF_SONNET_PREFIX
+        AND EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/build/prefix/lib/cmake/KF6Sonnet")
     set(FREEBUFF_SONNET_PREFIX "${CMAKE_CURRENT_SOURCE_DIR}/build/prefix")
 endif()
 
@@ -108,20 +159,24 @@ if(KF6Sonnet_FOUND)
     target_link_libraries(markdowneditor PRIVATE KF6::SonnetUi KF6::SonnetCore)
     target_compile_definitions(markdowneditor PRIVATE FREEBUFF_HAVE_SONNET)
     if(FREEBUFF_SONNET_PREFIX)
-        # Runtime layout for a prefix-based Sonnet: Loader searches
-        # QCoreApplication::libraryPaths() + "/kf6/sonnet" (the exe dir), and
-        # dictionary data is found via the baked SONNET_INSTALL_PREFIX
-        # (build/prefix/bin/data/hunspell). No extra environment needed.
-        foreach(_sonnet_dll KF6SonnetCore.dll KF6SonnetUi.dll)
+        # Runtime layout for the self-contained Windows prefix: Loader
+        # searches QCoreApplication::libraryPaths() + "/kf6/sonnet" (the exe
+        # dir), and dictionary data is found via the baked
+        # SONNET_INSTALL_PREFIX (build/prefix/bin/data/hunspell). The macOS
+        # bundle has a different dylib/plugin layout and is validated by
+        # Installer/MacOS/macdeploy.sh rather than copying Windows DLLs here.
+        if(WIN32)
+            foreach(_sonnet_dll KF6SonnetCore.dll KF6SonnetUi.dll)
+                add_custom_command(TARGET markdowneditor POST_BUILD
+                    COMMAND ${CMAKE_COMMAND} -E copy_if_different
+                        "${FREEBUFF_SONNET_PREFIX}/bin/${_sonnet_dll}"
+                        $<TARGET_FILE_DIR:markdowneditor>)
+            endforeach()
             add_custom_command(TARGET markdowneditor POST_BUILD
                 COMMAND ${CMAKE_COMMAND} -E copy_if_different
-                    "${FREEBUFF_SONNET_PREFIX}/bin/${_sonnet_dll}"
-                    $<TARGET_FILE_DIR:markdowneditor>)
-        endforeach()
-        add_custom_command(TARGET markdowneditor POST_BUILD
-            COMMAND ${CMAKE_COMMAND} -E copy_if_different
-                "${FREEBUFF_SONNET_PREFIX}/lib/plugins/kf6/sonnet/sonnet_hunspell.dll"
-                "$<TARGET_FILE_DIR:markdowneditor>/kf6/sonnet/sonnet_hunspell.dll")
+                    "${FREEBUFF_SONNET_PREFIX}/lib/plugins/kf6/sonnet/sonnet_hunspell.dll"
+                    "$<TARGET_FILE_DIR:markdowneditor>/kf6/sonnet/sonnet_hunspell.dll")
+        endif()
     endif()
     message(STATUS "Sonnet found - spell check enabled")
 else()
@@ -163,7 +218,7 @@ if(BUILD_TESTING)
     if(KF6Sonnet_FOUND)
         target_link_libraries(test_core PRIVATE KF6::SonnetUi KF6::SonnetCore)
         target_compile_definitions(test_core PRIVATE FREEBUFF_HAVE_SONNET)
-        if(FREEBUFF_SONNET_PREFIX)
+        if(FREEBUFF_SONNET_PREFIX AND WIN32)
             foreach(_sonnet_dll KF6SonnetCore.dll KF6SonnetUi.dll)
                 add_custom_command(TARGET test_core POST_BUILD
                     COMMAND ${CMAKE_COMMAND} -E copy_if_different
