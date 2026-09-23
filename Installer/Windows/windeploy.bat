@@ -9,7 +9,7 @@ rem 3. Adds the MSVC C runtime DLLs (no vc_redist.exe dependency).
 rem 4. Adds the optional Sonnet spell-check stack (client plugin + dictionaries)
 rem    from build\prefix when it was built there.
 rem
-rem Usage:  devcmd.bat Installer\Windows\windeploy.bat
+rem Usage:  tools\windows\devcmd.bat Installer\Windows\windeploy.bat
 rem Output: Installer\Windows\packages\com.mdeditor.markdowneditor\data
 rem ============================================================================
 setlocal EnableExtensions
@@ -24,9 +24,9 @@ set "IFW_BIN=C:\Qt\Tools\QtInstallerFramework\4.11\bin"
 
 echo [1/5] Building Release preset...
 pushd "%REPO_ROOT%"
-call build\devcmd.bat cmake --preset release
+call tools\windows\devcmd.bat cmake --preset release
 if errorlevel 1 goto :fail
-call build\devcmd.bat cmake --build --preset release
+call tools\windows\devcmd.bat cmake --build --preset release
 if errorlevel 1 goto :fail
 popd
 if not exist "%REPO_ROOT%\build\release\markdowneditor.exe" (
@@ -99,7 +99,7 @@ echo Deploy tree staged at:
 echo   %DATA%
 echo   (DLLs, plugins, translation-free Qt runtime, CRT, dictionaries)
 echo.
-echo Next: devcmd.bat Installer\Windows\make-installer.bat
+echo Next: tools\windows\devcmd.bat Installer\Windows\make-installer.bat
 exit /b 0
 
 :fail

@@ -4,7 +4,7 @@ rem make-installer.bat - build the offline installer with Qt Installer Framework
 rem
 rem Prerequisite: Installer\Windows\windeploy.bat has run successfully (staged data dir).
 rem
-rem Usage:  devcmd.bat Installer\Windows\make-installer.bat
+rem Usage:  tools\windows\devcmd.bat Installer\Windows\make-installer.bat
 rem Output: Installer\Windows\MarkdownEditor-<version>-offline.exe
 rem         (version parsed from CMakeLists.txt, the single source of truth)
 rem ============================================================================
@@ -26,7 +26,7 @@ set "OUT=%REPO_ROOT%\Installer\Windows\MarkdownEditor-%VERSION%-offline.exe"
 
 if not exist "%PKG_DIR%\com.mdeditor.markdowneditor\data\markdowneditor.exe" (
     echo ERROR: staged data directory is empty or missing markdowneditor.exe.
-    echo        Run first:  devcmd.bat Installer\Windows\windeploy.bat
+    echo        Run first:  tools\windows\devcmd.bat Installer\Windows\windeploy.bat
     goto :fail
 )
 

@@ -16,8 +16,8 @@ platform does not overwrite the other platform's payload. Keep the
 Run these commands from the repository root:
 
 ```text
-build\devcmd.bat Installer\Windows\windeploy.bat
-build\devcmd.bat Installer\Windows\make-installer.bat
+tools\windows\devcmd.bat Installer\Windows\windeploy.bat
+tools\windows\devcmd.bat Installer\Windows\make-installer.bat
 ./Installer/MacOS/macdeploy.sh
 ./Installer/MacOS/make-installer.sh
 QT_DIR=$HOME/Qt/6.11.1/gcc_64 ./Installer/Linux/linuxdeploy.sh

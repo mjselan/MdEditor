@@ -38,7 +38,7 @@ The preview uses Qt's built-in Markdown support; fenced code blocks are rendered
 - CMake 3.21+, Ninja (or any CMake generator), a C++20 compiler
 - *Optional:* KDE Frameworks Sonnet 6 (`KF6Sonnet`, components `SonnetUi` + `SonnetCore`) for spell check. The build degrades gracefully: without Sonnet everything works except spell check.
 
-  A self-contained Sonnet stack (ECM + static hunspell + KF6 Sonnet + en_US dictionaries) can be provisioned into `build/prefix` with the helper scripts in `build/`: `deps-ecm.bat`, `hunspell-cl.bat`, `deps-sonnet.bat`, `deps-dicts.bat` (Windows/MSVC; the Linux equivalents are `cmake` invocations of the same projects). On Windows, CMake auto-detects that prefix and the runtime DLLs/plugin are copied next to the built binary automatically; other platforms should use a matching native Sonnet installation.
+  A self-contained Sonnet stack (ECM + static hunspell + KF6 Sonnet + en_US dictionaries) can be provisioned into `build/prefix` with the helper scripts in `tools/windows/`: `deps-ecm.bat`, `hunspell-cl.bat`, `deps-sonnet.bat`, `deps-dicts.bat` (run each via `tools\windows\devcmd.bat`; the Linux equivalents are `cmake` invocations of the same projects). On Windows, CMake auto-detects that prefix and the runtime DLLs/plugin are copied next to the built binary automatically; other platforms should use a matching native Sonnet installation.
 
 ## Build
 
@@ -76,7 +76,7 @@ ctest --preset debug
 build\debug\markdowneditor.exe
 ```
 
-The repository also ships a local helper script (not tracked, under the gitignored `build/` tree pattern): `build\devcmd.bat` wraps any command with the MSVC + Qt environment, e.g. `build\devcmd.bat cmake --build --preset debug`.
+The repository ships `tools\windows\devcmd.bat`, which wraps any command with the MSVC + Qt environment, e.g. `tools\windows\devcmd.bat cmake --build --preset debug` (overrides: `QT_DIR`, `VS_DIR`, `VC_ARCH`, `NINJA_DIR`).
 
 ### macOS
 
@@ -95,15 +95,15 @@ the Qt kit's bundled CMake tools.
 
 ## Packaging & installation (Windows)
 
-Windows ships are produced with **Qt Installer Framework 4.x** (installed with Qt under `Tools\QtInstallerFramework`; the scripts use 4.11). The Windows-specific files live in `Installer/Windows/` and are driven by two scripts run through the `devcmd.bat` environment wrapper:
+Windows ships are produced with **Qt Installer Framework 4.x** (installed with Qt under `Tools\QtInstallerFramework`; the scripts use 4.11). The Windows-specific files live in `Installer/Windows/` and are driven by two scripts run through the `tools\windows\devcmd.bat` environment wrapper:
 
 ```bat
 rem 1. Build the Release preset and stage a self-contained app tree
 rem    (windeployqt6 DLLs + plugins, MSVC CRT DLLs, Sonnet spell-check stack).
-build\devcmd.bat Installer\Windows\windeploy.bat
+tools\windows\devcmd.bat Installer\Windows\windeploy.bat
 
 rem 2. Assemble the offline installer (binarycreator).
-build\devcmd.bat Installer\Windows\make-installer.bat
+tools\windows\devcmd.bat Installer\Windows\make-installer.bat
 ```
 
 The result is `Installer\Windows\MarkdownEditor-<version>-offline.exe` (~54 MB; version parsed from `CMakeLists.txt`). No `vc_redist` bootstrapper is needed — the CRT DLLs (`vcruntime140.dll`, `vcruntime140_1.dll`, `msvcp140.dll`) are bundled next to the exe. What exactly gets staged is detailed in [docs/packaging.md](docs/packaging.md).

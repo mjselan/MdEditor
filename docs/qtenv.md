@@ -1,5 +1,9 @@
 # Qt6 Build Environment
 
+The tracked `tools\windows\devcmd.bat` wrapper sets all of this up
+automatically (overrides: `QT_DIR`, `VS_DIR`, `VC_ARCH`, `NINJA_DIR`).
+The manual equivalent follows.
+
 ## Environment Variables
 ```
 QT_DIR=C:\Qt\6.11.1\msvc2022_64
