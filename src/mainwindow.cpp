@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
 #include "mainwindow.h"
 
 #include "appicons.h"
@@ -972,9 +973,13 @@ void MainWindow::writeRecoveryFile()
     root.insert(QStringLiteral("timestamp"),
                 QDateTime::currentDateTime().toString(Qt::ISODate));
 
-    QFile file(recoveryFilePath());
-    if (file.open(QIODevice::WriteOnly))
+    // Atomic write: a crash mid-save must never leave a corrupt snapshot
+    // that would "restore" an empty document on next launch.
+    QSaveFile file(recoveryFilePath());
+    if (file.open(QIODevice::WriteOnly)) {
         file.write(QJsonDocument(root).toJson(QJsonDocument::Compact));
+        file.commit();
+    }
 }
 
 void MainWindow::clearRecoveryFile()

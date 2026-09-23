@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
 // Generates a macOS .icns file from the code-painted application icon.
 // The build uses this only on Apple platforms; the shipped app still keeps
 // its artwork in C++ and therefore has no runtime asset dependency.

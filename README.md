@@ -308,7 +308,6 @@ Installer/
     config/config.xml   Windows Qt IFW configuration
     packages/com.mdeditor.markdowneditor/
       meta/             Windows package metadata, shortcuts, GPL text
-      meta/             Windows package metadata and shortcuts
       data/             windeploy payload (gitignored)
     windeploy.bat       Windows Release build + staging
     make-installer.bat  Windows binarycreator invocation
@@ -316,7 +315,6 @@ Installer/
     config/config.xml   macOS Qt IFW configuration
     packages/com.mdeditor.markdowneditor/
       meta/             macOS package metadata, GPL text
-      meta/             macOS package metadata
       data/             macdeploy payload (gitignored)
     macdeploy.sh        macOS Release build + .app staging
     make-installer.sh   macOS IFW or native drag-and-drop DMG
@@ -324,7 +322,6 @@ Installer/
     config/config.xml   Linux Qt IFW configuration
     packages/com.mdeditor.markdowneditor/
       meta/             Linux package metadata, desktop entry, GPL text
-      meta/             Linux package metadata + desktop entry
       data/             linuxdeploy payload (gitignored)
     linuxdeploy.sh      Linux Release build + Qt bundling (ldd/patchelf)
     make-installer.sh   Linux binarycreator invocation (.run)

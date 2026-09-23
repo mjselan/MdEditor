@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
 #include "spellchecker.h"
 
 #ifdef MARKDOWNEDITOR_HAVE_SONNET

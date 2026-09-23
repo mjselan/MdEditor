@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
 #pragma once
 
 #include <QColor>
@@ -41,6 +42,10 @@ signals:
 
 protected:
     QVariant loadResource(int type, const QUrl &name) override;
+
+private slots:
+    // Anchor clicks are filtered to safe schemes; anything else is ignored.
+    void openAllowedLink(const QUrl &url);
 
 private:
     QTimer m_debounce;

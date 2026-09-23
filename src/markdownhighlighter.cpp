@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
 #include "markdownhighlighter.h"
 
 #include "spellchecker.h"

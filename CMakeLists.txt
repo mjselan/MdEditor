@@ -8,9 +8,14 @@ project(MarkdownEditor
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
-set(CMAKE_AUTOMOC ON)
-set(CMAKE_AUTOUIC ON)
-set(CMAKE_AUTORCC ON)
+# qt_standard_project_setup() below enables AUTOMOC/AUTOUIC/AUTORCC, so the
+# explicit set() calls are intentionally omitted here.
+
+if(MSVC)
+    add_compile_options(/W4 /utf-8)
+else()
+    add_compile_options(-Wall -Wextra -Wpedantic)
+endif()
 
 find_package(Qt6 6.5 REQUIRED COMPONENTS Core Gui Widgets PrintSupport)
 
@@ -90,6 +95,7 @@ if(WIN32)
             "PATH=$<TARGET_FILE_DIR:Qt6::Core>\\;$ENV{PATH}"
             $<TARGET_FILE:tool_makeico> "${MARKDOWNEDITOR_APP_ICO}"
         DEPENDS tool_makeico tools/makeico/main.cpp src/appicons.cpp src/appicons.h
+        VERBATIM
         COMMENT "Generating resources/app.ico")
     add_custom_target(app_icon DEPENDS "${MARKDOWNEDITOR_APP_ICO}")
     add_dependencies(markdowneditor app_icon)
@@ -119,6 +125,7 @@ if(APPLE)
             "QT_QPA_PLATFORM=offscreen"
             $<TARGET_FILE:tool_makeicns> "${MARKDOWNEDITOR_APP_ICNS}"
         DEPENDS tool_makeicns tools/makeicns/main.cpp src/appicons.cpp src/appicons.h
+        VERBATIM
         COMMENT "Generating resources/MarkdownEditor.icns")
     add_custom_target(app_icon DEPENDS "${MARKDOWNEDITOR_APP_ICNS}")
     add_dependencies(markdowneditor app_icon)
@@ -194,7 +201,12 @@ else()
 endif()
 
 # --- Tests -------------------------------------------------------------------
-include(CTest)
+# Only when built standalone: include(CTest) defines BUILD_TESTING defaulting
+# to ON, which would otherwise leak tests into parent projects and Release
+# builds that did not ask for them.
+if(PROJECT_IS_TOP_LEVEL)
+    include(CTest)
+endif()
 if(BUILD_TESTING)
     find_package(Qt6 6.5 REQUIRED COMPONENTS Test)
     qt_add_executable(test_core tests/test_core.cpp
@@ -242,4 +254,7 @@ if(BUILD_TESTING)
         endif()
     endif()
     add_test(NAME test_core COMMAND test_core)
+    # The suite instantiates widgets; force a headless platform so it also
+    # passes on CI runners and servers without a display.
+    set_tests_properties(test_core PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen")
 endif()

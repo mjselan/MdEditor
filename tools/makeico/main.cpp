@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
 // Generates resources/app.ico from the code-painted application icon.
 // Writes classic uncompressed Windows ICO entries (BMP payloads), which every
 // shell version renders. One-shot developer tool, not part of the shipped app.

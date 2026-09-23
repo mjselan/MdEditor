@@ -1,5 +1,7 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
 #include "markdownpreview.h"
 
+#include <QDesktopServices>
 #include <QDir>
 #include <QImage>
 #include <QScrollBar>
@@ -9,7 +11,11 @@
 MarkdownPreview::MarkdownPreview(QWidget *parent)
     : QTextBrowser(parent)
 {
-    setOpenExternalLinks(true);
+    // Never hand raw document links straight to the OS: only http/https
+    // links and mail addresses may leave the app.
+    setOpenExternalLinks(false);
+    connect(this, &QTextBrowser::anchorClicked,
+            this, &MarkdownPreview::openAllowedLink);
     setFrameShape(QTextBrowser::NoFrame);
 
     m_debounce.setSingleShot(true);
@@ -74,4 +80,14 @@ QVariant MarkdownPreview::loadResource(int type, const QUrl &name)
         }
     }
     return QTextBrowser::loadResource(type, name);
+}
+
+void MarkdownPreview::openAllowedLink(const QUrl &url)
+{
+    const QString scheme = url.scheme().toLower();
+    if (scheme == QLatin1String("http") || scheme == QLatin1String("https")
+        || scheme == QLatin1String("mailto")) {
+        QDesktopServices::openUrl(url);
+    }
+    // Anything else (file://, custom schemes, ...) is silently ignored.
 }
