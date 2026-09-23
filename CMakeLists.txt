@@ -55,6 +55,11 @@ target_link_libraries(mdeditor_core PUBLIC
 
 qt_add_executable(markdowneditor WIN32 src/main.cpp)
 target_link_libraries(markdowneditor PRIVATE mdeditor_core)
+# Single source of truth for the release version: packagers, the About
+# dialog (via QCoreApplication::applicationVersion), and the installer
+# scripts all derive it from project(VERSION).
+target_compile_definitions(markdowneditor PRIVATE
+    "MARKDOWNEDITOR_VERSION=\"${PROJECT_VERSION}\"")
 
 # A macOS build must be a real application bundle, rather than a bare
 # executable.  Qt's deployment tools (macdeployqt and the Installer Framework)

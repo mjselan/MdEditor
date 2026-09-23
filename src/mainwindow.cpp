@@ -222,6 +222,9 @@ void MainWindow::createActions()
     m_actionRedo->setShortcut(QKeySequence::Redo);
     connect(m_actionRedo, &QAction::triggered, m_editor, &QPlainTextEdit::redo);
 
+    m_actionAbout = new QAction(tr("&About Markdown Editor"), this);
+    connect(m_actionAbout, &QAction::triggered, this, &MainWindow::showAbout);
+
     // Format actions are created here (not in createMenus) because both the
     // Format toolbar and the Format menu share them.
     const auto makeFormatAction = [this](const QString &text, const QKeySequence &shortcut,
@@ -325,6 +328,9 @@ void MainWindow::createMenus()
 
     QMenu *toolsMenu = menuBar()->addMenu(tr("&Tools"));
     toolsMenu->addAction(m_actionSpellCheck);
+
+    QMenu *helpMenu = menuBar()->addMenu(tr("&Help"));
+    helpMenu->addAction(m_actionAbout);
 }
 
 void MainWindow::createToolbars()
@@ -832,6 +838,18 @@ void MainWindow::updateWindowTitle()
     if (!m_currentFile.isEmpty())
         name = QFileInfo(m_currentFile).fileName();
     setWindowTitle(QStringLiteral("%1[*] - %2").arg(name, tr("Markdown Editor")));
+}
+
+void MainWindow::showAbout()
+{
+    QMessageBox::about(
+        this, tr("About Markdown Editor"),
+        tr("<h3>Markdown Editor %1</h3>"
+           "<p>A cross-platform Markdown editor with live preview.</p>"
+           "<p>Licensed under the GNU General Public License v3 or later.<br/>"
+           "<a href=\"https://github.com/mjselan/MdEditor\">"
+           "https://github.com/mjselan/MdEditor</a></p>")
+            .arg(QCoreApplication::applicationVersion()));
 }
 
 void MainWindow::updateCounts()

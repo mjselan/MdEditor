@@ -78,6 +78,8 @@ private slots:
     void rebuildOutline();
     void onOutlineActivated(int cursorPosition);
 
+    void showAbout();
+
 private:
     void createWidgets();
     void createActions();
@@ -147,6 +149,7 @@ private:
     QAction *m_actionSmallerFont = nullptr;
     QAction *m_actionChooseFont = nullptr;
     QAction *m_actionSpellCheck = nullptr;
+    QAction *m_actionAbout = nullptr;
 
     // Format actions (shared by Format menu and Format toolbar).
     QAction *m_actionBold = nullptr;

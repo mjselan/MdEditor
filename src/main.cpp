@@ -10,7 +10,7 @@ int main(int argc, char *argv[])
     QApplication app(argc, argv);
     QApplication::setOrganizationName(QStringLiteral("MdEditor"));
     QApplication::setApplicationName(QStringLiteral("MarkdownEditor"));
-    QApplication::setApplicationVersion(QStringLiteral("1.0.0"));
+    QApplication::setApplicationVersion(QStringLiteral(MARKDOWNEDITOR_VERSION));
     QApplication::setWindowIcon(appicons::applicationIcon());
 
     // Default to the OS color scheme until the user overrides it in settings.
