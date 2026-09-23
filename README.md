@@ -1,8 +1,12 @@
 # Markdown Editor
 
-A cross-platform desktop Markdown editor built with **Qt 6 Widgets (6.5+)** and **CMake**, targeting Windows, macOS, and Linux.
+Write beautifully, everywhere. Markdown Editor is a **free, open-source writing app** for notes, documents, and READMEs — you type in plain text on the left, and a polished preview appears live on the right. No accounts, no subscriptions, no internet required. It runs on **Windows, macOS, and Linux**, follows your system's light/dark mode, and exports your work to HTML or PDF.
+
+Ready-to-install packages are published on the [Releases page](https://github.com/mjselan/MdEditor/releases) as they become available (Linux available now).
 
 ![Markdown Editor screenshot](Screenshot.png)
+
+> **For developers:** built with Qt 6 Widgets and CMake (C++20). Build instructions for each platform, plus packaging and project internals, are documented below.
 
 ## Features
 
