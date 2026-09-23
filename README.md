@@ -2,6 +2,8 @@
 
 A cross-platform desktop Markdown editor built with **Qt 6 Widgets (6.5+)** and **CMake**, targeting Windows, macOS, and Linux.
 
+![Markdown Editor screenshot](Screenshot.png)
+
 ## Features
 
 - **Split view**: raw Markdown editor (left) with live-rendered preview (right), updated on a 250 ms throttle (at most one render per interval, anchored to the first keystroke)
