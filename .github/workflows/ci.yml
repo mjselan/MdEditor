@@ -1,0 +1,41 @@
+name: CI
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  build-test-ubuntu:
+    # Oldest supported release: also guards the glibc baseline of the
+    # produced binaries.
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Ninja
+        run: sudo apt-get update && sudo apt-get install -y ninja-build
+
+      - name: Install Qt 6.11 (gcc_64)
+        uses: jurplel/install-qt-action@v4
+        with:
+          version: 6.11.1
+          host: linux
+          target: desktop
+          arch: gcc_64
+          cache: true
+
+      - name: Configure debug preset (tests on)
+        # No Sonnet on the runner: this exercises the graceful
+        # spell-check-disabled path. find_package(Qt6) locates the kit
+        # via the Qt6_DIR environment set by install-qt-action.
+        run: cmake --preset debug
+
+      - name: Build debug preset
+        run: cmake --build --preset debug
+
+      - name: Run tests
+        # test_core forces QT_QPA_PLATFORM=offscreen itself.
+        run: ctest --preset debug
+
+      - name: Configure release preset
+        run: cmake --preset release
