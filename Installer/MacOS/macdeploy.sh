@@ -12,17 +12,17 @@
 #   QT_DIR=/path/to/Qt/6.x/macos ./Installer/MacOS/macdeploy.sh
 #
 # QT_DIR may be omitted when qmake6/qmake is on PATH.  Set
-# FREEBUFF_PRESET to use a different CMake preset (the default is release).
+# MARKDOWNEDITOR_PRESET to use a different CMake preset (the default is release).
 set -Eeuo pipefail
 
 SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd -P)"
 REPO_ROOT="$(cd -- "$SCRIPT_DIR/../.." && pwd -P)"
 INSTALLER_DIR="$SCRIPT_DIR"
 PKG_DIR="$INSTALLER_DIR/packages"
-DATA_DIR="$PKG_DIR/com.freebuff.markdowneditor/data"
-PRESET="${FREEBUFF_PRESET:-release}"
+DATA_DIR="$PKG_DIR/com.mdeditor.markdowneditor/data"
+PRESET="${MARKDOWNEDITOR_PRESET:-release}"
 BUILD_DIR="$REPO_ROOT/build/$PRESET"
-APP_BUNDLE_NAME="FreebuffMarkdownEditor.app"
+APP_BUNDLE_NAME="MarkdownEditor.app"
 
 die() {
     printf 'ERROR: %s\n' "$*" >&2

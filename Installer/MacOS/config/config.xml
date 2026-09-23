@@ -1,11 +1,11 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <Installer>
-    <Name>Freebuff Markdown Editor</Name>
+    <Name>Markdown Editor</Name>
     <Version>1.0.0</Version>
-    <Title>Freebuff Markdown Editor Installer</Title>
-    <Publisher>Freebuff</Publisher>
+    <Title>Markdown Editor Installer</Title>
+    <Publisher>MdEditor</Publisher>
     <WizardStyle>Mac</WizardStyle>
-    <TargetDir>@ApplicationsDir@/FreebuffMarkdownEditor</TargetDir>
+    <TargetDir>@ApplicationsDir@/MarkdownEditor</TargetDir>
     <AllowNonAsciiCharacters>true</AllowNonAsciiCharacters>
     <AllowSpaceInPath>true</AllowSpaceInPath>
 </Installer>

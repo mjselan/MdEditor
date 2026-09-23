@@ -1,8 +1,8 @@
 cmake_minimum_required(VERSION 3.21)
 
-project(FreebuffMarkdownEditor
+project(MarkdownEditor
     VERSION 1.0.0
-    DESCRIPTION "Freebuff Markdown Editor"
+    DESCRIPTION "Markdown Editor"
     LANGUAGES CXX)
 
 set(CMAKE_CXX_STANDARD 20)
@@ -49,12 +49,12 @@ qt_add_executable(markdowneditor WIN32
 if(APPLE)
     set_target_properties(markdowneditor PROPERTIES
         MACOSX_BUNDLE TRUE
-        OUTPUT_NAME "FreebuffMarkdownEditor"
-        MACOSX_BUNDLE_BUNDLE_NAME "Freebuff Markdown Editor"
-        MACOSX_BUNDLE_GUI_IDENTIFIER "com.freebuff.markdowneditor"
+        OUTPUT_NAME "MarkdownEditor"
+        MACOSX_BUNDLE_BUNDLE_NAME "Markdown Editor"
+        MACOSX_BUNDLE_GUI_IDENTIFIER "com.mdeditor.markdowneditor"
         MACOSX_BUNDLE_SHORT_VERSION_STRING "${PROJECT_VERSION}"
         MACOSX_BUNDLE_BUNDLE_VERSION "${PROJECT_VERSION}"
-        MACOSX_BUNDLE_COPYRIGHT "Copyright (C) Freebuff")
+        MACOSX_BUNDLE_COPYRIGHT "Copyright (C) MdEditor")
     # Keep Qt's normal build-tree runtime path so the freshly built app can be
     # launched from the build directory.  Installer/MacOS/macdeploy.sh lets
     # macdeployqt rewrite the staged copy to use its bundled Frameworks.
@@ -82,21 +82,21 @@ if(WIN32)
     target_link_libraries(tool_makeico PRIVATE Qt6::Gui)
     set_target_properties(tool_makeico PROPERTIES WIN32_EXECUTABLE OFF)
 
-    set(FREEBUFF_APP_RC "${CMAKE_CURRENT_SOURCE_DIR}/resources/app.rc")
-    set(FREEBUFF_APP_ICO "${CMAKE_CURRENT_SOURCE_DIR}/resources/app.ico")
+    set(MARKDOWNEDITOR_APP_RC "${CMAKE_CURRENT_SOURCE_DIR}/resources/app.rc")
+    set(MARKDOWNEDITOR_APP_ICO "${CMAKE_CURRENT_SOURCE_DIR}/resources/app.ico")
     add_custom_command(
-        OUTPUT "${FREEBUFF_APP_ICO}"
+        OUTPUT "${MARKDOWNEDITOR_APP_ICO}"
         COMMAND ${CMAKE_COMMAND} -E env
             "PATH=$<TARGET_FILE_DIR:Qt6::Core>\\;$ENV{PATH}"
-            $<TARGET_FILE:tool_makeico> "${FREEBUFF_APP_ICO}"
+            $<TARGET_FILE:tool_makeico> "${MARKDOWNEDITOR_APP_ICO}"
         DEPENDS tool_makeico tools/makeico/main.cpp src/appicons.cpp src/appicons.h
         COMMENT "Generating resources/app.ico")
-    add_custom_target(app_icon DEPENDS "${FREEBUFF_APP_ICO}")
+    add_custom_target(app_icon DEPENDS "${MARKDOWNEDITOR_APP_ICO}")
     add_dependencies(markdowneditor app_icon)
 
-    target_sources(markdowneditor PRIVATE "${FREEBUFF_APP_RC}")
-    set_source_files_properties("${FREEBUFF_APP_RC}" PROPERTIES
-        OBJECT_DEPENDS "${FREEBUFF_APP_ICO}")
+    target_sources(markdowneditor PRIVATE "${MARKDOWNEDITOR_APP_RC}")
+    set_source_files_properties("${MARKDOWNEDITOR_APP_RC}" PROPERTIES
+        OBJECT_DEPENDS "${MARKDOWNEDITOR_APP_ICO}")
 endif()
 
 # --- Application icon (macOS bundle metadata) --------------------------------
@@ -111,22 +111,22 @@ if(APPLE)
         MACOSX_BUNDLE OFF
         WIN32_EXECUTABLE OFF)
 
-    set(FREEBUFF_APP_ICNS
-        "${CMAKE_CURRENT_SOURCE_DIR}/resources/FreebuffMarkdownEditor.icns")
+    set(MARKDOWNEDITOR_APP_ICNS
+        "${CMAKE_CURRENT_SOURCE_DIR}/resources/MarkdownEditor.icns")
     add_custom_command(
-        OUTPUT "${FREEBUFF_APP_ICNS}"
+        OUTPUT "${MARKDOWNEDITOR_APP_ICNS}"
         COMMAND ${CMAKE_COMMAND} -E env
             "QT_QPA_PLATFORM=offscreen"
-            $<TARGET_FILE:tool_makeicns> "${FREEBUFF_APP_ICNS}"
+            $<TARGET_FILE:tool_makeicns> "${MARKDOWNEDITOR_APP_ICNS}"
         DEPENDS tool_makeicns tools/makeicns/main.cpp src/appicons.cpp src/appicons.h
-        COMMENT "Generating resources/FreebuffMarkdownEditor.icns")
-    add_custom_target(app_icon DEPENDS "${FREEBUFF_APP_ICNS}")
+        COMMENT "Generating resources/MarkdownEditor.icns")
+    add_custom_target(app_icon DEPENDS "${MARKDOWNEDITOR_APP_ICNS}")
     add_dependencies(markdowneditor app_icon)
-    set_source_files_properties("${FREEBUFF_APP_ICNS}" PROPERTIES
+    set_source_files_properties("${MARKDOWNEDITOR_APP_ICNS}" PROPERTIES
         MACOSX_PACKAGE_LOCATION "Resources")
-    target_sources(markdowneditor PRIVATE "${FREEBUFF_APP_ICNS}")
+    target_sources(markdowneditor PRIVATE "${MARKDOWNEDITOR_APP_ICNS}")
     set_target_properties(markdowneditor PROPERTIES
-        MACOSX_BUNDLE_ICON_FILE "FreebuffMarkdownEditor.icns")
+        MACOSX_BUNDLE_ICON_FILE "MarkdownEditor.icns")
 endif()
 
 # --- Optional spell check via KDE Frameworks Sonnet -------------------------
@@ -138,18 +138,18 @@ endif()
 # that prefix exists it is searched first; otherwise a system KF6Sonnet is
 # used if present. A non-Windows prefix must provide a matching native layout;
 # the Windows DLL copy steps below are deliberately limited to WIN32.
-if(WIN32 AND NOT FREEBUFF_SONNET_PREFIX
+if(WIN32 AND NOT MARKDOWNEDITOR_SONNET_PREFIX
         AND EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/build/prefix/lib/cmake/KF6Sonnet")
-    set(FREEBUFF_SONNET_PREFIX "${CMAKE_CURRENT_SOURCE_DIR}/build/prefix")
+    set(MARKDOWNEDITOR_SONNET_PREFIX "${CMAKE_CURRENT_SOURCE_DIR}/build/prefix")
 endif()
 
-set(FREEBUFF_SONNET_SEARCH "")
-if(FREEBUFF_SONNET_PREFIX)
-    list(APPEND FREEBUFF_SONNET_SEARCH "${FREEBUFF_SONNET_PREFIX}/lib/cmake/KF6Sonnet")
+set(MARKDOWNEDITOR_SONNET_SEARCH "")
+if(MARKDOWNEDITOR_SONNET_PREFIX)
+    list(APPEND MARKDOWNEDITOR_SONNET_SEARCH "${MARKDOWNEDITOR_SONNET_PREFIX}/lib/cmake/KF6Sonnet")
 endif()
 
 find_package(KF6Sonnet QUIET COMPONENTS SonnetUi SonnetCore
-    PATHS ${FREEBUFF_SONNET_SEARCH}
+    PATHS ${MARKDOWNEDITOR_SONNET_SEARCH}
     NO_DEFAULT_PATH)
 if(NOT KF6Sonnet_FOUND)
     find_package(KF6Sonnet QUIET COMPONENTS SonnetUi SonnetCore)
@@ -157,8 +157,8 @@ endif()
 
 if(KF6Sonnet_FOUND)
     target_link_libraries(markdowneditor PRIVATE KF6::SonnetUi KF6::SonnetCore)
-    target_compile_definitions(markdowneditor PRIVATE FREEBUFF_HAVE_SONNET)
-    if(FREEBUFF_SONNET_PREFIX)
+    target_compile_definitions(markdowneditor PRIVATE MARKDOWNEDITOR_HAVE_SONNET)
+    if(MARKDOWNEDITOR_SONNET_PREFIX)
         # Runtime layout for the self-contained Windows prefix: Loader
         # searches QCoreApplication::libraryPaths() + "/kf6/sonnet" (the exe
         # dir), and dictionary data is found via the baked
@@ -169,12 +169,12 @@ if(KF6Sonnet_FOUND)
             foreach(_sonnet_dll KF6SonnetCore.dll KF6SonnetUi.dll)
                 add_custom_command(TARGET markdowneditor POST_BUILD
                     COMMAND ${CMAKE_COMMAND} -E copy_if_different
-                        "${FREEBUFF_SONNET_PREFIX}/bin/${_sonnet_dll}"
+                        "${MARKDOWNEDITOR_SONNET_PREFIX}/bin/${_sonnet_dll}"
                         $<TARGET_FILE_DIR:markdowneditor>)
             endforeach()
             add_custom_command(TARGET markdowneditor POST_BUILD
                 COMMAND ${CMAKE_COMMAND} -E copy_if_different
-                    "${FREEBUFF_SONNET_PREFIX}/lib/plugins/kf6/sonnet/sonnet_hunspell.dll"
+                    "${MARKDOWNEDITOR_SONNET_PREFIX}/lib/plugins/kf6/sonnet/sonnet_hunspell.dll"
                     "$<TARGET_FILE_DIR:markdowneditor>/kf6/sonnet/sonnet_hunspell.dll")
         endif()
     endif()
@@ -217,17 +217,17 @@ if(BUILD_TESTING)
     # by CI wherever Sonnet is installed.
     if(KF6Sonnet_FOUND)
         target_link_libraries(test_core PRIVATE KF6::SonnetUi KF6::SonnetCore)
-        target_compile_definitions(test_core PRIVATE FREEBUFF_HAVE_SONNET)
-        if(FREEBUFF_SONNET_PREFIX AND WIN32)
+        target_compile_definitions(test_core PRIVATE MARKDOWNEDITOR_HAVE_SONNET)
+        if(MARKDOWNEDITOR_SONNET_PREFIX AND WIN32)
             foreach(_sonnet_dll KF6SonnetCore.dll KF6SonnetUi.dll)
                 add_custom_command(TARGET test_core POST_BUILD
                     COMMAND ${CMAKE_COMMAND} -E copy_if_different
-                        "${FREEBUFF_SONNET_PREFIX}/bin/${_sonnet_dll}"
+                        "${MARKDOWNEDITOR_SONNET_PREFIX}/bin/${_sonnet_dll}"
                         $<TARGET_FILE_DIR:test_core>)
             endforeach()
             add_custom_command(TARGET test_core POST_BUILD
                 COMMAND ${CMAKE_COMMAND} -E copy_if_different
-                    "${FREEBUFF_SONNET_PREFIX}/lib/plugins/kf6/sonnet/sonnet_hunspell.dll"
+                    "${MARKDOWNEDITOR_SONNET_PREFIX}/lib/plugins/kf6/sonnet/sonnet_hunspell.dll"
                     "$<TARGET_FILE_DIR:test_core>/kf6/sonnet/sonnet_hunspell.dll")
         endif()
     endif()

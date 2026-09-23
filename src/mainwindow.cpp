@@ -53,7 +53,7 @@ constexpr int kDebounceMs = 250;
 constexpr int kAutosaveIntervalMs = 30 * 1000;
 constexpr int kMaxRecentFiles = 10;
 
-QString settingsOrg() { return QStringLiteral("Freebuff"); }
+QString settingsOrg() { return QStringLiteral("MdEditor"); }
 QString settingsApp() { return QStringLiteral("MarkdownEditor"); }
 
 QString fileFilter()
@@ -830,7 +830,7 @@ void MainWindow::updateWindowTitle()
     QString name = tr("Untitled");
     if (!m_currentFile.isEmpty())
         name = QFileInfo(m_currentFile).fileName();
-    setWindowTitle(QStringLiteral("%1[*] - %2").arg(name, tr("Freebuff Markdown Editor")));
+    setWindowTitle(QStringLiteral("%1[*] - %2").arg(name, tr("Markdown Editor")));
 }
 
 void MainWindow::updateCounts()

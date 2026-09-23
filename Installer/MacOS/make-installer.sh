@@ -17,14 +17,14 @@
 #   IFW_BIN                path to binarycreator (or its containing directory)
 #   IFW_VERSION            preferred Qt Installer Framework version (4.11)
 #   IFW_SIGN_IDENTITY      code-signing identity for the IFW installer app
-#   FREEBUFF_VERSION       override the version in the output filename
+#   MARKDOWNEDITOR_VERSION  override the version in the output filename
 set -Eeuo pipefail
 
 SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd -P)"
 REPO_ROOT="$(cd -- "$SCRIPT_DIR/../.." && pwd -P)"
 INSTALLER_DIR="$SCRIPT_DIR"
 PACKAGES_DIR="$INSTALLER_DIR/packages"
-DATA_DIR="$PACKAGES_DIR/com.freebuff.markdowneditor/data"
+DATA_DIR="$PACKAGES_DIR/com.mdeditor.markdowneditor/data"
 CONFIG_FILE="$INSTALLER_DIR/config/config.xml"
 
 FORMAT="${INSTALLER_FORMAT:-dmg}"
@@ -112,7 +112,7 @@ esac
 [[ -d "$DATA_DIR" ]] || \
     die "staged package data is missing; run $REPO_ROOT/Installer/MacOS/macdeploy.sh first"
 
-VERSION="${FREEBUFF_VERSION:-}"
+VERSION="${MARKDOWNEDITOR_VERSION:-}"
 if [[ -z "$VERSION" ]]; then
     VERSION="$(awk '/^[[:space:]]*VERSION[[:space:]]+[0-9]/ { print $2; exit }' "$REPO_ROOT/CMakeLists.txt")"
 fi
@@ -220,17 +220,17 @@ make_native_dmg() {
     command -v ditto >/dev/null 2>&1 || \
         die "ditto is required for the native DMG format"
 
-    STAGE_DIR="$(mktemp -d "${TMPDIR:-/tmp}/freebuff-markdown-editor.XXXXXX")"
+    STAGE_DIR="$(mktemp -d "${TMPDIR:-/tmp}/mdeditor-markdown-editor.XXXXXX")"
     local app_name output
     app_name="$(basename -- "$APP_PATH")"
-    output="$INSTALLER_DIR/FreebuffMarkdownEditor-$VERSION.dmg"
+    output="$INSTALLER_DIR/MarkdownEditor-$VERSION.dmg"
 
     # Keep the app relocatable and use the usual Applications drag target.
     ditto "$APP_PATH" "$STAGE_DIR/$app_name"
     ln -s /Applications "$STAGE_DIR/Applications"
     rm -f "$output"
     hdiutil create \
-        -volname "Freebuff Markdown Editor" \
+        -volname "Markdown Editor" \
         -srcfolder "$STAGE_DIR" \
         -format UDZO \
         -ov \
@@ -239,7 +239,7 @@ make_native_dmg() {
     [[ -f "$output" ]] || die "hdiutil reported success but $output is missing"
     hdiutil verify "$output" >/dev/null || die "hdiutil verification failed for $output"
     info "Created $output ($(file_size "$output") bytes)"
-    info "Mount the DMG and drag Freebuff Markdown Editor to Applications."
+    info "Mount the DMG and drag Markdown Editor to Applications."
 }
 
 make_ifw_dmg() {
@@ -250,7 +250,7 @@ make_ifw_dmg() {
     [[ -n "$binarycreator" ]] || \
         die "Qt Installer Framework binarycreator was not found; install Qt Installer Framework 4.x or use --dmg"
     ifw_dir="$(cd -- "$(dirname -- "$binarycreator")" && pwd -P)"
-    output="$INSTALLER_DIR/FreebuffMarkdownEditor-$VERSION-offline.dmg"
+    output="$INSTALLER_DIR/MarkdownEditor-$VERSION-offline.dmg"
 
     local args=(
         --config "$CONFIG_FILE"
@@ -272,7 +272,7 @@ make_ifw_dmg() {
     hdiutil verify "$output" >/dev/null || \
         die "hdiutil verification failed for $output"
     info "Created $output ($(file_size "$output") bytes)"
-    info "The DMG contains the Qt Installer Framework wizard for Freebuff Markdown Editor."
+    info "The DMG contains the Qt Installer Framework wizard for Markdown Editor."
 }
 
 if [[ "$FORMAT" == "auto" ]]; then

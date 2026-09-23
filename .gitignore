@@ -52,6 +52,7 @@ x64/
 *.creator.user*
 .idea/
 cmake-build*/
+.creator/
 
 # OS / editor
 Thumbs.db
@@ -70,9 +71,12 @@ resources/app.ico
 resources/*.icns
 
 # Qt IFW installer: keep config/meta sources; ignore platform payloads + outputs
+dist/
 Installer/Windows/packages/*/data/
 Installer/MacOS/packages/*/data/
+Installer/Linux/packages/*/data/
 Installer/Windows/*.exe
 Installer/MacOS/*.dmg
 Installer/MacOS/*.app
+Installer/Linux/*.run
 InstallationLog.txt

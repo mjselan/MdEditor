@@ -1,13 +1,13 @@
 #include "spellchecker.h"
 
-#ifdef FREEBUFF_HAVE_SONNET
-#include <Sonnet/speller.h>
+#ifdef MARKDOWNEDITOR_HAVE_SONNET
+#include <Sonnet/Speller>
 #endif
 
 class SpellChecker::Impl
 {
 public:
-#ifdef FREEBUFF_HAVE_SONNET
+#ifdef MARKDOWNEDITOR_HAVE_SONNET
     Sonnet::Speller speller; // value type in KF6 Sonnet; no heap wrapper needed
     bool enabled = false;
 #endif
@@ -23,7 +23,7 @@ SpellChecker::~SpellChecker() = default;
 
 bool SpellChecker::available() const
 {
-#ifdef FREEBUFF_HAVE_SONNET
+#ifdef MARKDOWNEDITOR_HAVE_SONNET
     return d->speller.isValid();
 #else
     return false;
@@ -32,7 +32,7 @@ bool SpellChecker::available() const
 
 bool SpellChecker::enabled() const
 {
-#ifdef FREEBUFF_HAVE_SONNET
+#ifdef MARKDOWNEDITOR_HAVE_SONNET
     return available() && d->enabled;
 #else
     return false;
@@ -41,7 +41,7 @@ bool SpellChecker::enabled() const
 
 QString SpellChecker::currentDictionary() const
 {
-#ifdef FREEBUFF_HAVE_SONNET
+#ifdef MARKDOWNEDITOR_HAVE_SONNET
     if (d->speller.isValid())
         return d->speller.language();
 #endif
@@ -50,7 +50,7 @@ QString SpellChecker::currentDictionary() const
 
 QStringList SpellChecker::dictionaries() const
 {
-#ifdef FREEBUFF_HAVE_SONNET
+#ifdef MARKDOWNEDITOR_HAVE_SONNET
     if (d->speller.isValid())
         return d->speller.availableLanguages();
 #endif
@@ -59,7 +59,7 @@ QStringList SpellChecker::dictionaries() const
 
 bool SpellChecker::isWordCorrect(const QString &word) const
 {
-#ifdef FREEBUFF_HAVE_SONNET
+#ifdef MARKDOWNEDITOR_HAVE_SONNET
     if (!enabled() || !d->speller.isValid())
         return true;
     if (word.size() < 2)
@@ -78,7 +78,7 @@ bool SpellChecker::isWordCorrect(const QString &word) const
 
 QStringList SpellChecker::suggestionsFor(const QString &word) const
 {
-#ifdef FREEBUFF_HAVE_SONNET
+#ifdef MARKDOWNEDITOR_HAVE_SONNET
     if (enabled() && d->speller.isValid() && d->speller.isMisspelled(word))
         return d->speller.suggest(word);
 #endif
@@ -87,7 +87,7 @@ QStringList SpellChecker::suggestionsFor(const QString &word) const
 
 void SpellChecker::ignoreWord(const QString &word)
 {
-#ifdef FREEBUFF_HAVE_SONNET
+#ifdef MARKDOWNEDITOR_HAVE_SONNET
     if (d->speller.isValid()) {
         d->speller.addToSession(word);
         if (d->enabled)
@@ -100,7 +100,7 @@ void SpellChecker::ignoreWord(const QString &word)
 
 void SpellChecker::addToPersonal(const QString &word)
 {
-#ifdef FREEBUFF_HAVE_SONNET
+#ifdef MARKDOWNEDITOR_HAVE_SONNET
     if (d->speller.isValid()) {
         d->speller.addToPersonal(word);
         if (d->enabled)
@@ -113,7 +113,7 @@ void SpellChecker::addToPersonal(const QString &word)
 
 void SpellChecker::setEnabled(bool enabled)
 {
-#ifdef FREEBUFF_HAVE_SONNET
+#ifdef MARKDOWNEDITOR_HAVE_SONNET
     if (d->enabled == enabled)
         return;
     d->enabled = enabled;
@@ -125,7 +125,7 @@ void SpellChecker::setEnabled(bool enabled)
 
 void SpellChecker::setDictionary(const QString &dictionary)
 {
-#ifdef FREEBUFF_HAVE_SONNET
+#ifdef MARKDOWNEDITOR_HAVE_SONNET
     if (d->speller.isValid()) {
         d->speller.setLanguage(dictionary);
         if (d->enabled)

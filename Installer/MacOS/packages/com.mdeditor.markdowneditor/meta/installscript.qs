@@ -1,4 +1,4 @@
-// Component script for the macOS com.freebuff.markdowneditor package.
+// Component script for the macOS com.mdeditor.markdowneditor package.
 // The app bundle is extracted by IFW's default operations; macOS has no
 // Start Menu shortcut operation.
 

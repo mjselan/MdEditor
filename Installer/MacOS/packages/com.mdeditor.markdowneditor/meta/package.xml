@@ -1,10 +1,10 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <Package>
-    <DisplayName>Freebuff Markdown Editor</DisplayName>
-    <Description>Freebuff Markdown Editor macOS application bundle and bundled Qt runtime. Optional spell-check data is included when available.</Description>
+    <DisplayName>Markdown Editor</DisplayName>
+    <Description>Markdown Editor macOS application bundle and bundled Qt runtime. Optional spell-check data is included when available.</Description>
     <Version>1.0.0</Version>
     <ReleaseDate>2026-09-22</ReleaseDate>
-    <Name>com.freebuff.markdowneditor</Name>
+    <Name>com.mdeditor.markdowneditor</Name>
     <Dependencies></Dependencies>
     <ForcedInstallation>true</ForcedInstallation>
     <Essential>false</Essential>

@@ -1,0 +1,13 @@
+[Desktop Entry]
+Type=Application
+Name=Markdown Editor
+GenericName=Markdown Editor
+Comment=Cross-platform Markdown editor with live preview
+Exec=markdowneditor %F
+Icon=markdowneditor
+Terminal=false
+Categories=Office;TextEditor;
+MimeType=text/markdown;text/x-markdown;text/plain;
+StartupWMClass=markdowneditor
+Keywords=markdown;editor;notes;preview;
+X-AppImage-Version=1.0.0

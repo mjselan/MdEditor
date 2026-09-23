@@ -10,14 +10,14 @@ rem 4. Adds the optional Sonnet spell-check stack (client plugin + dictionaries)
 rem    from build\prefix when it was built there.
 rem
 rem Usage:  devcmd.bat Installer\Windows\windeploy.bat
-rem Output: Installer\Windows\packages\com.freebuff.markdowneditor\data
+rem Output: Installer\Windows\packages\com.mdeditor.markdowneditor\data
 rem ============================================================================
 setlocal EnableExtensions
 
 rem --- Locate the repo root (two levels above this script) --------------------
 set "SCRIPT_DIR=%~dp0"
 for %%I in ("%SCRIPT_DIR%..\..") do set "REPO_ROOT=%%~fI"
-set "PKG=%REPO_ROOT%\Installer\Windows\packages\com.freebuff.markdowneditor"
+set "PKG=%REPO_ROOT%\Installer\Windows\packages\com.mdeditor.markdowneditor"
 set "DATA=%PKG%\data"
 set "QT_DIR=C:\Qt\6.11.1\msvc2022_64"
 set "IFW_BIN=C:\Qt\Tools\QtInstallerFramework\4.11\bin"

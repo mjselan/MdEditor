@@ -1,4 +1,4 @@
-// Component script for com.freebuff.markdowneditor.
+// Component script for com.mdeditor.markdowneditor.
 // Adds Start Menu shortcuts on install; IFW removes them again on uninstall
 // because CreateShortcut operations are transactional.
 
@@ -15,10 +15,10 @@ Component.prototype.createOperations = function()
         var appExe = "@TargetDir@/markdowneditor.exe";
 
         // Application shortcut inside the Start Menu group from config.xml
-        // (<StartMenuDir>Freebuff Markdown Editor</StartMenuDir>).
+        // (<StartMenuDir>Markdown Editor</StartMenuDir>).
         component.addOperation("CreateShortcut",
             appExe,
-            "@StartMenuDir@/Freebuff Markdown Editor.lnk",
+            "@StartMenuDir@/Markdown Editor.lnk",
             "iconPath=" + appExe,
             "iconId=0",
             "workingDirectory=@TargetDir@");
@@ -27,7 +27,7 @@ Component.prototype.createOperations = function()
         var maint = "@TargetDir@/maintenancetool.exe";
         component.addOperation("CreateShortcut",
             maint,
-            "@StartMenuDir@/Uninstall Freebuff Markdown Editor.lnk",
+            "@StartMenuDir@/Uninstall Markdown Editor.lnk",
             "iconPath=" + maint,
             "iconId=0",
             "workingDirectory=@TargetDir@");
@@ -35,7 +35,7 @@ Component.prototype.createOperations = function()
         // Optional per-user desktop shortcut - uncomment to enable.
         // component.addOperation("CreateShortcut",
         //     appExe,
-        //     "@DesktopDir@/Freebuff Markdown Editor.lnk",
+        //     "@DesktopDir@/Markdown Editor.lnk",
         //     "iconPath=" + appExe,
         //     "iconId=0",
         //     "workingDirectory=@TargetDir@");

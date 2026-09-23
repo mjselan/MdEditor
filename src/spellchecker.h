@@ -4,7 +4,7 @@
 #include <QStringList>
 
 // Spell-check facade over KDE Frameworks Sonnet's core Speller. When the
-// library was not found at CMake configure time (FREEBUFF_HAVE_SONNET
+// library was not found at CMake configure time (MARKDOWNEDITOR_HAVE_SONNET
 // undefined) every method degrades to a harmless no-op and available()
 // returns false, so callers can wire the UI up unconditionally.
 //

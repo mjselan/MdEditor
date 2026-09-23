@@ -10,12 +10,12 @@ BEGIN
     BEGIN
         BLOCK "040904B0"
         BEGIN
-            VALUE "CompanyName",      "Freebuff"
-            VALUE "FileDescription",  "Freebuff Markdown Editor"
+            VALUE "CompanyName",      "MdEditor"
+            VALUE "FileDescription",  "Markdown Editor"
             VALUE "FileVersion",      "1.0.0.0"
             VALUE "InternalName",     "markdowneditor"
             VALUE "OriginalFilename", "markdowneditor.exe"
-            VALUE "ProductName",      "Freebuff Markdown Editor"
+            VALUE "ProductName",      "Markdown Editor"
             VALUE "ProductVersion",   "1.0.0.0"
         END
     END

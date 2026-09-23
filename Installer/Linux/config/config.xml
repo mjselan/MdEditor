@@ -4,8 +4,8 @@
     <Version>1.0.0</Version>
     <Title>Markdown Editor Installer</Title>
     <Publisher>MdEditor</Publisher>
-    <StartMenuDir>Markdown Editor</StartMenuDir>
-    <TargetDir>@ApplicationsDir@/MarkdownEditor</TargetDir>
+    <TargetDir>@HomeDir@/MarkdownEditor</TargetDir>
+    <MaintenanceToolName>maintenancetool</MaintenanceToolName>
     <AllowNonAsciiCharacters>true</AllowNonAsciiCharacters>
     <AllowSpaceInPath>true</AllowSpaceInPath>
 </Installer>
