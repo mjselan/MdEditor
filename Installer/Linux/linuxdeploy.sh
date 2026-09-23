@@ -344,20 +344,11 @@ info "[5/5] Staging desktop metadata and optional spell-check data..."
 if [[ -f "$INSTALLER_DIR/markdowneditor.png" ]]; then
     cp -f "$INSTALLER_DIR/markdowneditor.png" \
         "$DATA_DIR/markdowneditor.png"
-elif [[ -f "$REPO_ROOT/packaging/linux/markdowneditor.png" ]]; then
-    cp -f "$REPO_ROOT/packaging/linux/markdowneditor.png" \
-        "$DATA_DIR/markdowneditor.png"
-elif [[ -f "$REPO_ROOT/dist/AppDir/markdowneditor.png" ]]; then
-    cp -f "$REPO_ROOT/dist/AppDir/markdowneditor.png" \
-        "$DATA_DIR/markdowneditor.png"
 else
     die "no application icon found (Installer/Linux/markdowneditor.png)"
 fi
 if [[ -f "$INSTALLER_DIR/markdowneditor.desktop" ]]; then
     cp -f "$INSTALLER_DIR/markdowneditor.desktop" \
-        "$DATA_DIR/markdowneditor.desktop"
-elif [[ -f "$REPO_ROOT/dist/AppDir/markdowneditor.desktop" ]]; then
-    cp -f "$REPO_ROOT/dist/AppDir/markdowneditor.desktop" \
         "$DATA_DIR/markdowneditor.desktop"
 fi
 
