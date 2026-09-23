@@ -119,22 +119,6 @@ command -v patchelf >/dev/null 2>&1 || \
     die "patchelf is required (sudo apt install patchelf)"
 command -v ldd >/dev/null 2>&1 || die "ldd was not found"
 
-# Ubuntu 24.04 carries glibc 2.39. A binary linked on a newer Ubuntu needs a
-# newer glibc and will fail to start on 24.04, so warn when the build host
-# is newer than the minimum supported release.
-if command -v lsb_release >/dev/null 2>&1; then
-    UBUNTU_RELEASE="$(lsb_release -rs 2>/dev/null || true)"
-    if [[ -n "$UBUNTU_RELEASE" ]]; then
-        UBUNTU_MAJOR="${UBUNTU_RELEASE%%.*}"
-        if [[ "$UBUNTU_MAJOR" =~ ^[0-9]+$ ]] && (( UBUNTU_MAJOR > 24 )); then
-            info "WARNING: build host is Ubuntu $UBUNTU_RELEASE; binaries may"
-            info "WARNING: need a newer glibc than Ubuntu 24.04 provides."
-            info "WARNING: For a 24.04-compatible release, run this script on"
-            info "WARNING: Ubuntu 24.04 itself."
-        fi
-    fi
-fi
-
 # Resolve the Qt plugin and library roots for both the online installer
 # layout (QT_DIR/plugins, QT_DIR/lib) and distro layouts.
 QT_PLUGINS=""
@@ -439,6 +423,27 @@ done < <(find "$DATA_DIR" -type f \( -name 'markdowneditor.bin' -o -name '*.so' 
 if ldd "$DATA_DIR/markdowneditor.bin" 2>/dev/null \
         | grep -F "$REPO_ROOT/build" >/dev/null 2>&1; then
     die "staged app still depends on a build-tree path; bundling is incomplete"
+fi
+
+# Compatibility measurement, not a guess: Ubuntu 24.04 ships glibc 2.39, so
+# a staged object needing newer GLIBC symbols will not start there no
+# matter which kernel or release built it. (The kernel version is
+# irrelevant here -- glibc abstracts it away.)
+if command -v objdump >/dev/null 2>&1; then
+    max_glibc="$(for obj in "$DATA_DIR/markdowneditor.bin" "$DATA_DIR"/lib/*.so*; do
+        [[ -f "$obj" ]] || continue
+        objdump -T "$obj" 2>/dev/null | grep -oE 'GLIBC_[0-9.]+'
+    done | sort -Vu | tail -n 1)"
+    if [[ -n "$max_glibc" ]]; then
+        max_ver="${max_glibc#GLIBC_}"
+        newest="$(printf '%s\n%s\n' "$max_ver" "2.39" | sort -V | tail -n 1)"
+        if [[ "$newest" != "2.39" ]]; then
+            info "WARNING: staged tree needs $max_glibc, newer than Ubuntu 24.04's glibc 2.39."
+            info "WARNING: For a 24.04-compatible release, build on Ubuntu 24.04 itself."
+        else
+            info "glibc baseline: max $max_glibc <= 2.39, compatible with Ubuntu 24.04+."
+        fi
+    fi
 fi
 
 info ""

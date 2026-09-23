@@ -278,9 +278,13 @@ ldd ~/MarkdownEditor/markdowneditor.bin | grep "not found"
 
 - Supported arch is **x86_64**. Wayland and X11 sessions are both covered
   via the bundled `qxcb`/`qwayland` platform plugins.
-- **Build on the oldest Ubuntu you ship to.** A binary linked on a newer
-  Ubuntu needs a newer glibc and will not start on 24.04.
-  `linuxdeploy.sh` warns when the build host is newer than 24.04.
+- **Build on the oldest Ubuntu you ship to.** A binary needing glibc symbols
+  newer than 24.04's glibc 2.39 will not start on 24.04 (the kernel version
+  does not matter for this).
+  `linuxdeploy.sh` measures the staged tree's max `GLIBC_*` requirement
+  with `objdump` and reports whether it fits the 2.39 baseline, so a future
+  toolchain or Qt upgrade that breaks 24.04 compatibility fails visibly
+  instead of silently.
 - Qt 6.11's online-installer libraries target 22.04+ and run on 24.04+;
   no `LD_LIBRARY_PATH` wrapper is needed thanks to `RPATH` + `qt.conf`.
 - Set `MARKDOWNEDITOR_PRESET` to build a different CMake preset and
