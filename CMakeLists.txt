@@ -134,18 +134,28 @@ endif()
 # spell check disabled; no other functionality is affected.
 #
 # A full KF6 Sonnet + static hunspell stack lives in build/prefix (built by
-# build\hunspell-cl.bat + build\deps-sonnet.bat) for Windows packaging. When
-# that prefix exists it is searched first; otherwise a system KF6Sonnet is
-# used if present. A non-Windows prefix must provide a matching native layout;
-# the Windows DLL copy steps below are deliberately limited to WIN32.
-if(WIN32 AND NOT MARKDOWNEDITOR_SONNET_PREFIX
-        AND EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/build/prefix/lib/cmake/KF6Sonnet")
-    set(MARKDOWNEDITOR_SONNET_PREFIX "${CMAKE_CURRENT_SOURCE_DIR}/build/prefix")
+# build\hunspell-cl.bat + build\deps-sonnet.bat on Windows, or the matching
+# native cmake invocations on Linux). When that prefix exists it is searched
+# first -- either the plain lib/ layout or the multi-arch
+# lib/<triplet>/ layout -- otherwise a system KF6Sonnet is used if present.
+# The Windows DLL copy steps below are deliberately limited to WIN32; on
+# other platforms the build-tree RPATH covers the prefix libraries.
+if(NOT MARKDOWNEDITOR_SONNET_PREFIX)
+    foreach(_sonnet_cmake_dir
+            "${CMAKE_CURRENT_SOURCE_DIR}/build/prefix/lib/cmake/KF6Sonnet"
+            "${CMAKE_CURRENT_SOURCE_DIR}/build/prefix/lib/x86_64-linux-gnu/cmake/KF6Sonnet")
+        if(EXISTS "${_sonnet_cmake_dir}")
+            set(MARKDOWNEDITOR_SONNET_PREFIX "${CMAKE_CURRENT_SOURCE_DIR}/build/prefix")
+            break()
+        endif()
+    endforeach()
 endif()
 
 set(MARKDOWNEDITOR_SONNET_SEARCH "")
 if(MARKDOWNEDITOR_SONNET_PREFIX)
-    list(APPEND MARKDOWNEDITOR_SONNET_SEARCH "${MARKDOWNEDITOR_SONNET_PREFIX}/lib/cmake/KF6Sonnet")
+    list(APPEND MARKDOWNEDITOR_SONNET_SEARCH
+        "${MARKDOWNEDITOR_SONNET_PREFIX}/lib/cmake/KF6Sonnet"
+        "${MARKDOWNEDITOR_SONNET_PREFIX}/lib/x86_64-linux-gnu/cmake/KF6Sonnet")
 endif()
 
 find_package(KF6Sonnet QUIET COMPONENTS SonnetUi SonnetCore

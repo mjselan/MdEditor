@@ -17,9 +17,11 @@ Component.prototype.createOperations = function()
     // "ubuntu", "debian", ... on Linux), so discriminate on the kernel.
     if (systemInfo.kernelType === "linux") {
         // The execute bit can be lost when the package archive is created
-        // on some systems; make the launch deterministic.
+        // on some systems; make the launch deterministic. The wrapper and
+        // the real binary are both covered.
         component.addOperation("Execute",
-            "chmod", "+x", "@TargetDir@/markdowneditor");
+            "chmod", "+x", "@TargetDir@/markdowneditor",
+            "@TargetDir@/markdowneditor.bin");
 
         // Launcher entry in the user's applications directory. Icon points
         // at the staged PNG inside the install dir, so no hicolor install

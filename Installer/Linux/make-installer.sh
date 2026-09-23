@@ -46,9 +46,12 @@ if [[ -z "$VERSION" ]]; then
 fi
 [[ -n "$VERSION" ]] || VERSION="1.0.0"
 
-APP_BIN="$DATA_DIR/markdowneditor"
+APP_BIN="$DATA_DIR/markdowneditor.bin"
+APP_LAUNCHER="$DATA_DIR/markdowneditor"
 [[ -x "$APP_BIN" ]] || \
     die "staged app binary is missing; run Installer/Linux/linuxdeploy.sh first"
+[[ -x "$APP_LAUNCHER" ]] || \
+    die "staged launcher wrapper is missing; rerun linuxdeploy.sh"
 [[ -f "$DATA_DIR/qt.conf" ]] || \
     die "qt.conf is missing in $DATA_DIR; rerun linuxdeploy.sh"
 [[ -f "$DATA_DIR/plugins/platforms/libqxcb.so" ]] || \
@@ -74,12 +77,13 @@ fi
 
 # The bundled Qt must actually load. The app has no --help/--version flag
 # (argv[1] is treated as a file path) and runs its event loop, so launch it
-# headless under offscreen and kill it after a few seconds: exit code 124
-# from `timeout` means it was still running, i.e. Qt initialized fine. A
-# broken RPATH/qt.conf aborts immediately with a platform-plugin error.
+# via the launcher wrapper headless under offscreen and kill it after a few
+# seconds: exit code 124 from `timeout` means it was still running, i.e. Qt
+# initialized fine. A broken RPATH/qt.conf aborts immediately with a
+# platform-plugin error.
 if command -v timeout >/dev/null 2>&1; then
-    smoke_out="$(LD_LIBRARY_PATH="$DATA_DIR/lib" QT_QPA_PLATFORM=offscreen \
-        timeout 10s "$APP_BIN" 2>&1 || true)"
+    smoke_out="$(QT_QPA_PLATFORM=offscreen \
+        timeout 10s "$APP_LAUNCHER" 2>&1 || true)"
     if printf '%s\n' "$smoke_out" | grep -qiE \
             'qt\.qpa.*(could not|failed|error|fatal)|could not load.*platform|error while loading shared|cannot open shared'; then
         printf '%s\n' "$smoke_out" >&2

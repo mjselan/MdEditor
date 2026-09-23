@@ -204,11 +204,13 @@ flow: deploy the application first, then assemble the installer payload.
 ```bash
 # Build tools on Ubuntu 24.04+
 sudo apt install cmake ninja-build patchelf \
-  libxcb-cursor0 libxkbcommon-x11-0 libxkbcommon0 \
-  libfontconfig1 libfreetype6 libglib2.0-0t libdbus-1-3 \
-  libx11-xcb1 libxcb-icccm4 libxcb-image0 libxcb-keysyms1 \
-  libxcb-randr0 libxcb-render-util0 libxcb-shape0 libxcb-sync1 \
-  libxcb-xfixes0 libxcb-xkb1 libgl1 libegl1
+  libxcb-cursor0 libxcb-icccm4 libxcb-image0 libxcb-keysyms1 \
+  libxcb-randr0 libxcb-render0 libxcb-render-util0 libxcb-shape0 \
+  libxcb-shm0 libxcb-sync1 libxcb-util1 libxcb-xfixes0 libxcb-xkb1 \
+  libx11-6 libx11-xcb1 libxkbcommon0 libxkbcommon-x11-0 \
+  libwayland-client0 libwayland-cursor0 libwayland-egl1 \
+  libegl1 libgl1 libopengl0 libdrm2 \
+  libfontconfig1 libfreetype6 libglib2.0-0t libdbus-1-3
 
 # 1. Build Release and stage a self-contained app tree
 #    (binary + Qt libs via ldd, plugins, qt.conf with RPATH $ORIGIN/lib,
@@ -244,7 +246,7 @@ Into `Installer/Linux/packages/com.mdeditor.markdowneditor/data` (gitignored):
 
 | Content | Source |
 |---|---|
-| `markdowneditor`, `lib/libQt6*.so*`, `lib/libicu*`, `lib/libKF6Sonnet*` (when linked) | Release build + `ldd` collection |
+| `markdowneditor` (launcher wrapper: system-lib preflight + exec), `markdowneditor.bin` (real binary), `lib/libQt6*.so*` (Core/Gui/Widgets/DBus/PrintSupport + XcbQpa/WaylandClient/WlShellIntegration/OpenGL/Network/Svg plugin support libs), `lib/libicu*`, `lib/libKF6Sonnet*` (when linked) | Release build + `ldd` collection over the binary *and* every staged plugin |
 | `plugins/platforms` (`qxcb`, `qwayland`, `qminimal`, `qoffscreen`), `platformthemes`, `xcbglintegrations`, wayland integrations, `imageformats`, `iconengines`, `styles`, `networkinformation`, `tls`, `printsupport`, `generic`, `platforminputcontexts` | `$QT_DIR/plugins` (kiosk backends and `.debug` files skipped) |
 | `qt.conf` (`Prefix=.`, `Libraries=lib`, `Plugins=plugins`) + `RPATH=$ORIGIN/lib` via `patchelf` | Generated |
 | `markdowneditor.png`, `markdowneditor.desktop` (reference copy) | `Installer/Linux/` |
@@ -254,6 +256,23 @@ System libraries (`/lib`, `/usr/lib`: xcb, fontconfig, Mesa/GL, `libssl3`)
 are intentionally *not* bundled — Ubuntu 24.04 provides them (see the `apt`
 line above). System hunspell dictionaries (`/usr/share/hunspell`, package
 `hunspell-en-us`) are used when no staged dictionaries exist.
+
+### Troubleshooting
+
+`qt.qpa.plugin: Could not load the Qt platform plugin "xcb" ... From 6.5.0,
+xcb-cursor0 or libxcb-cursor0 is needed` (or the same for `"wayland"`) means
+a target machine is missing the system libraries the bundled platform
+plugins need. They are intentionally not bundled — install the `apt` line
+above on the target machine. The `markdowneditor` launcher wrapper detects
+this first and prints the exact fix instead of Qt's message. To confirm on
+any machine:
+
+```bash
+ldd ~/MarkdownEditor/plugins/platforms/libqxcb.so | grep "not found"
+ldd ~/MarkdownEditor/markdowneditor.bin | grep "not found"
+```
+
+(empty output = all good).
 
 ### Compatibility notes (Ubuntu 24.04 onwards)
 

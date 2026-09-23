@@ -148,6 +148,35 @@ for candidate in "$QT_DIR/plugins" "$QT_DIR/lib/qt6/plugins" \
 done
 [[ -n "$QT_PLUGINS" ]] || die "Qt plugins not found under $QT_DIR"
 
+# Copy one runtime library into lib/ unless already staged. Only the Qt,
+# ICU, and Sonnet stacks are bundled; system libraries stay on the host.
+# $1 = SONAME (e.g. libQt6XcbQpa.so.6), $2 = ldd-resolved path (may be
+# empty or "not": staged objects have no RPATH yet, so ldd cannot resolve
+# their Qt dependencies -- fall back to the Qt kit and Sonnet prefix).
+# Returns 0 when a new file was staged.
+stage_runtime_lib() {
+    local lib_name="$1" lib_path="${2:-}"
+    case "$lib_name" in
+        libQt6*.so*|libicu*.so*|libKF6*.so*|libhunspell*.so*) ;;
+        *) return 1 ;;
+    esac
+    [[ -f "$DATA_DIR/lib/$lib_name" ]] && return 1
+    if [[ -z "$lib_path" || ! -f "$lib_path" ]]; then
+        local d
+        for d in "$QT_DIR/lib" \
+                 "$REPO_ROOT/build/prefix/lib/x86_64-linux-gnu" \
+                 "$REPO_ROOT/build/prefix/lib"; do
+            if [[ -f "$d/$lib_name" ]]; then
+                lib_path="$d/$lib_name"
+                break
+            fi
+        done
+    fi
+    [[ -n "$lib_path" && -f "$lib_path" ]] || return 1
+    cp -Lf "$lib_path" "$DATA_DIR/lib/$lib_name" 2>/dev/null || \
+        cp -f "$lib_path" "$DATA_DIR/lib/$lib_name"
+}
+
 info "[1/5] Building the $PRESET preset..."
 "$CMAKE" --preset "$PRESET"
 "$CMAKE" --build --preset "$PRESET" --target markdowneditor
@@ -161,10 +190,19 @@ rm -rf "$DATA_DIR"
 mkdir -p "$DATA_DIR/lib" "$DATA_DIR/plugins"
 
 info "[3/5] Staging the executable and bundled shared libraries..."
-cp -f "$SOURCE_BIN" "$DATA_DIR/markdowneditor"
-chmod +x "$DATA_DIR/markdowneditor"
+# The real binary ships as markdowneditor.bin; the `markdowneditor` launcher
+# wrapper (preflight + exec) keeps that name so .desktop files and user
+# habits are unaffected.
+cp -f "$SOURCE_BIN" "$DATA_DIR/markdowneditor.bin"
+chmod +x "$DATA_DIR/markdowneditor.bin"
 if command -v strip >/dev/null 2>&1; then
-    strip --strip-unneeded "$DATA_DIR/markdowneditor" 2>/dev/null || true
+    strip --strip-unneeded "$DATA_DIR/markdowneditor.bin" 2>/dev/null || true
+fi
+if [[ -f "$INSTALLER_DIR/markdowneditor.sh" ]]; then
+    cp -f "$INSTALLER_DIR/markdowneditor.sh" "$DATA_DIR/markdowneditor"
+    chmod +x "$DATA_DIR/markdowneditor"
+else
+    die "launcher wrapper is missing (Installer/Linux/markdowneditor.sh)"
 fi
 
 # Bundle every shared library the executable resolves to that comes from a
@@ -175,64 +213,29 @@ fi
 bundled=0
 while IFS= read -r line; do
     # ldd lines look like: libQt6Core.so.6 => /path/libQt6Core.so.6 (addr)
+    # or, when unresolvable: libQt6XcbQpa.so.6 => not found
+    lib_name="$(printf '%s\n' "$line" | sed 's/^[[:space:]]*//;s/ =>.*//')"
     lib_path="$(printf '%s\n' "$line" | sed -n 's/.*=> \([^ ]*\).*/\1/p')"
-    [[ -n "$lib_path" ]] || continue
-    [[ -f "$lib_path" ]] || continue
-    lib_name="$(basename -- "$lib_path")"
-    case "$lib_name" in
-        libQt6*.so*|libicu*.so*|libKF6Sonnet*.so*|libKF6I18n*.so*|\
-        libhunspell*.so*|libSonnet*.so*|libdouble-conversion*.so*)
-            cp -Lf "$lib_path" "$DATA_DIR/lib/$lib_name" 2>/dev/null || \
-                cp -f "$lib_path" "$DATA_DIR/lib/$lib_name"
-            bundled=$((bundled + 1))
-            ;;
-        *)
-            # Also catch Qt libraries referenced by absolute path (for
-            # example a build/prefix Sonnet stack) even if the name is
-            # unusual.
-            case "$lib_path" in
-                "$QT_DIR"*|*"Qt"*"/lib/"*|*"/build/prefix/"*)
-                    cp -Lf "$lib_path" "$DATA_DIR/lib/$lib_name" 2>/dev/null || \
-                        cp -f "$lib_path" "$DATA_DIR/lib/$lib_name"
-                    bundled=$((bundled + 1))
-                    ;;
-            esac
-            ;;
-    esac
+    [[ "$lib_path" == "not" ]] && lib_path=""
+    if stage_runtime_lib "$lib_name" "$lib_path"; then
+        bundled=$((bundled + 1))
+    fi
 done < <(ldd "$SOURCE_BIN" 2>/dev/null)
 
 # Second pass: bundled Qt libraries have their own dependencies (ICU data,
-# Wayland client libs shipped with Qt, ...). Repeat until no new files
-# appear so the tree is closed under lib/.
+# libraries shipped with Qt, ...). Repeat until no new files appear so the
+# tree is closed under lib/.
 for _pass in 1 2 3; do
     added=0
     for staged in "$DATA_DIR"/lib/*.so*; do
         [[ -f "$staged" ]] || continue
         while IFS= read -r line; do
+            lib_name="$(printf '%s\n' "$line" | sed 's/^[[:space:]]*//;s/ =>.*//')"
             lib_path="$(printf '%s\n' "$line" | sed -n 's/.*=> \([^ ]*\).*/\1/p')"
-            [[ -n "$lib_path" ]] || continue
-            [[ -f "$lib_path" ]] || continue
-            lib_name="$(basename -- "$lib_path")"
-            [[ -f "$DATA_DIR/lib/$lib_name" ]] && continue
-            case "$lib_name" in
-                libQt6*.so*|libicu*.so*|libKF6*.so*|libhunspell*.so*|\
-                libwayland*.so*|libdouble-conversion*.so*|libpcre2*.so*)
-                    case "$lib_path" in
-                        /lib/*|/usr/lib/*)
-                            # System copies of generic libs (wayland,
-                            # pcre2) are only bundled when they came from
-                            # the Qt prefix; otherwise the OS provides them.
-                            case "$lib_path" in
-                                "$QT_DIR"*) ;;
-                                *) continue ;;
-                            esac
-                            ;;
-                    esac
-                    cp -Lf "$lib_path" "$DATA_DIR/lib/$lib_name" 2>/dev/null || \
-                        cp -f "$lib_path" "$DATA_DIR/lib/$lib_name"
-                    added=$((added + 1))
-                    ;;
-            esac
+            [[ "$lib_path" == "not" ]] && lib_path=""
+            if stage_runtime_lib "$lib_name" "$lib_path"; then
+                added=$((added + 1))
+            fi
         done < <(ldd "$staged" 2>/dev/null)
     done
     (( added == 0 )) && break
@@ -249,7 +252,12 @@ done
 info "[4/5] Staging Qt plugins, qt.conf, and RPATH..."
 # Plugin sets needed by a Qt Widgets app on X11 and Wayland. eglfs/linuxfb/
 # vnc/vkkhrdisplay are kiosk targets and are deliberately skipped to keep
-# the package small. Debug (.debug) files are skipped the same way.
+# the package small, as is wayland-graphics-integration-server (it serves
+# Wayland compositors, which this client app never loads -- bundling it
+# would drag in the whole QtQuick/QML stack). Debug (.debug) files are
+# skipped the same way. libqtiff/libqmng need external system codecs that
+# Ubuntu desktops may lack; they fail gracefully, but skipping them keeps
+# the tree clean (common formats stay: gif/ico/jpeg/svg/tga/wbmp/webp).
 copy_plugin() {
     local src="$QT_PLUGINS/$1"
     local dst="$DATA_DIR/plugins/$1"
@@ -260,7 +268,7 @@ copy_plugin() {
         [[ -f "$f" ]] || continue
         case "$(basename -- "$f")" in
             libqeglfs.so|libqlinuxfb.so|libqvnc.so|libqvkkhrdisplay.so|\
-            libqminimalegl.so|*.debug) continue ;;
+            libqminimalegl.so|libqtiff.so|libqmng.so|libqpdf.so|*.debug) continue ;;
         esac
         # Keep only the platform backends relevant on Ubuntu desktops.
         if [[ "$1" == "platforms" ]]; then
@@ -277,7 +285,6 @@ copy_plugin platforms
 copy_plugin platformthemes
 copy_plugin xcbglintegrations
 copy_plugin wayland-graphics-integration-client
-copy_plugin wayland-graphics-integration-server
 copy_plugin wayland-shell-integration
 copy_plugin wayland-decoration-client
 copy_plugin imageformats
@@ -292,6 +299,43 @@ copy_plugin platforminputcontexts
 [[ -f "$DATA_DIR/plugins/platforms/libqxcb.so" ]] || \
     die "platforms/libqxcb.so is missing; X11 systems could not start the app"
 
+# Plugin closure: the main binary's ldd does not cover libraries that only
+# plugins link (XcbQpa/WaylandClient for the platform plugins, OpenGL for
+# the GL integrations, Network for the TLS/network plugins, Svg for the
+# icon engine). Collect those into lib/ too, or the app dies at startup
+# with "could not load the Qt platform plugin".
+while IFS= read -r plugin; do
+    while IFS= read -r line; do
+        lib_name="$(printf '%s\n' "$line" | sed 's/^[[:space:]]*//;s/ =>.*//')"
+        lib_path="$(printf '%s\n' "$line" | sed -n 's/.*=> \([^ ]*\).*/\1/p')"
+        [[ "$lib_path" == "not" ]] && lib_path=""
+        stage_runtime_lib "$lib_name" "$lib_path" || true
+    done < <(ldd "$plugin" 2>/dev/null)
+done < <(find "$DATA_DIR/plugins" "$DATA_DIR/kf6" -type f -name '*.so' -print 2>/dev/null)
+
+# One more closure pass over lib/ for the newly added support libraries.
+for _pass in 1 2; do
+    added=0
+    for staged in "$DATA_DIR"/lib/*.so*; do
+        [[ -f "$staged" ]] || continue
+        while IFS= read -r line; do
+            lib_name="$(printf '%s\n' "$line" | sed 's/^[[:space:]]*//;s/ =>.*//')"
+            lib_path="$(printf '%s\n' "$line" | sed -n 's/.*=> \([^ ]*\).*/\1/p')"
+            [[ "$lib_path" == "not" ]] && lib_path=""
+            if stage_runtime_lib "$lib_name" "$lib_path"; then
+                added=$((added + 1))
+            fi
+        done < <(ldd "$staged" 2>/dev/null)
+    done
+    (( added == 0 )) && break
+done
+
+for required in libQt6XcbQpa libQt6WaylandClient libQt6OpenGL libQt6Network libQt6Svg; do
+    if ! ls "$DATA_DIR/lib/$required.so"* >/dev/null 2>&1; then
+        die "bundling did not capture $required (needed by the staged plugins)"
+    fi
+done
+
 # qt.conf makes the staged tree relocatable: Qt resolves libraries and
 # plugins relative to the executable instead of the build-time QT_DIR.
 cat > "$DATA_DIR/qt.conf" <<'EOF'
@@ -303,7 +347,7 @@ EOF
 
 # RPATH $ORIGIN/lib lets the dynamic linker find the bundled libraries
 # without LD_LIBRARY_PATH hacks or a wrapper script.
-patchelf --set-rpath '$ORIGIN/lib' "$DATA_DIR/markdowneditor"
+patchelf --set-rpath '$ORIGIN/lib' "$DATA_DIR/markdowneditor.bin"
 for staged in "$DATA_DIR"/lib/*.so*; do
     [[ -f "$staged" ]] || continue
     patchelf --set-rpath '$ORIGIN' "$staged" 2>/dev/null || true
@@ -374,13 +418,25 @@ fi
 
 # The staged tree must be self-contained: with lib/ on the search path,
 # nothing may be missing and no Qt library may resolve back to the build
-# machine's Qt prefix.
-if LD_LIBRARY_PATH="$DATA_DIR/lib" ldd "$DATA_DIR/markdowneditor" 2>/dev/null \
-        | grep -q 'not found'; then
-    LD_LIBRARY_PATH="$DATA_DIR/lib" ldd "$DATA_DIR/markdowneditor" || true
-    die "staged app still has unresolved libraries (see ldd above)"
-fi
-if ldd "$DATA_DIR/markdowneditor" 2>/dev/null \
+# machine's Qt prefix. Check the binary and every staged plugin -- a plugin
+# with an unbundled Qt dependency aborts the app at startup with
+# "could not load the Qt platform plugin". System libraries (xcb, Wayland,
+# GL, ...) are allowed to stay external; they come from Ubuntu and are
+# preflighted by the launcher wrapper.
+qt_missing=0
+while IFS= read -r obj; do
+    while IFS= read -r line; do
+        lib_name="$(printf '%s\n' "$line" | sed 's/^[[:space:]]*//;s/ =>.*//')"
+        case "$lib_name" in
+            libQt6*.so*|libicu*.so*|libKF6*.so*|libhunspell*.so*)
+                printf 'MISSING BUNDLED LIB: %s needs %s\n' "$obj" "$lib_name" >&2
+                qt_missing=1
+                ;;
+        esac
+    done < <(LD_LIBRARY_PATH="$DATA_DIR/lib" ldd "$obj" 2>/dev/null | grep 'not found' || true)
+done < <(find "$DATA_DIR" -type f \( -name 'markdowneditor.bin' -o -name '*.so' \) -print)
+(( qt_missing == 0 )) || die "staged tree still has unbundled Qt libraries (see above)"
+if ldd "$DATA_DIR/markdowneditor.bin" 2>/dev/null \
         | grep -F "$REPO_ROOT/build" >/dev/null 2>&1; then
     die "staged app still depends on a build-tree path; bundling is incomplete"
 fi

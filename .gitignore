@@ -50,6 +50,7 @@ x64/
 
 # Qt Creator / CLion
 *.creator.user*
+.qtcreator/
 .idea/
 cmake-build*/
 .creator/
