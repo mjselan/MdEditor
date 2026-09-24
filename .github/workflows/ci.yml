@@ -134,10 +134,12 @@ jobs:
       - name: Build Windows offline installer
         # VSCMD_VER is set by msvc-dev-cmd, so windeploy.bat invokes cmake
         # directly instead of re-entering tools\windows\devcmd.bat.
+        # `call` is required: without it control transfers to the first
+        # script and make-installer.bat would never run.
         shell: cmd
         run: |
-          Installer\Windows\windeploy.bat
-          Installer\Windows\make-installer.bat
+          call Installer\Windows\windeploy.bat
+          call Installer\Windows\make-installer.bat
 
       - name: Upload Windows installer artifact
         # v7 runs on Node.js 24 and avoids the deprecated Node.js 20 runtime.

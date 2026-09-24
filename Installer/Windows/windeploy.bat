@@ -39,7 +39,9 @@ echo [1/5] Building Release preset...
 if defined MARKDOWNEDITOR_SKIP_BUILD (
     echo       MARKDOWNEDITOR_SKIP_BUILD=1 - reusing the existing build tree.
 ) else if defined VSCMD_VER (
-    echo       Using the active MSVC environment (VSCMD_VER=%VSCMD_VER%).
+    rem NOTE: never echo a ")." sequence inside a block - cmd parses the
+    rem ")"/"." as block end + stray token (". was unexpected at this time").
+    echo       Using the active MSVC environment VSCMD_VER=%VSCMD_VER%.
     pushd "%REPO_ROOT%"
     call cmake --preset release
     if errorlevel 1 goto :fail
