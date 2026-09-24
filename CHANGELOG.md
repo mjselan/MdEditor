@@ -3,6 +3,34 @@
 All notable changes to Markdown Editor are documented here. The format is
 loosely based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
+## [1.0.3] - 2026-09-24
+
+### Fixed
+- `replaceAll` left its edit block open, merging later edits into one undo
+  step; the block now lives on a dedicated cursor.
+- Restoring a recovery snapshot no longer counts as saved: the document is
+  marked modified so closing prompts instead of discarding.
+- Autosave snapshots only while unsaved, into per-process files.
+- Editor font shortcuts (`Ctrl++`/`Ctrl+-`) persist via the live font.
+- Spell Check toggle rehighlights immediately; misspelled words get a
+  context menu (suggestions, ignore, add to dictionary).
+- Gutter colors follow the syntax scheme; current-line tint recomputed on
+  palette changes; Light/Dark palettes no longer depend on the OS palette.
+- `Ctrl+I` on `**bold**` adds italic instead of stripping to `*bold*`.
+- Headings keep trailing `#` without preceding whitespace (`## C#`).
+- Undo/Redo actions enable only when the stack allows.
+- CRLF files round-trip as CRLF; invalid UTF-8 warns on open.
+- HTML export is atomic with write checks.
+- Preview/editor scroll sync moves both viewports (reentry guard instead
+  of signal blocking); link clicks can no longer blank the preview.
+- Single-undo list continuation (empty item exits the list, no marker
+  duplication at line start, numpad Enter); transforms reselect;
+  cursor toggles its enclosing fenced block; URL drops open as files;
+  image paste prefers clipboard text.
+- Toolbar icon label fonts fit their boxes; icons use the platform UI
+  font; icon cache cleared on quit; monospace falls back to the system
+  fixed font.
+
 ## [1.0.2] - 2026-09-24
 
 ### Fixed
