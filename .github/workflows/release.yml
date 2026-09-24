@@ -117,7 +117,7 @@ jobs:
 
       - name: Install Qt Installer Framework
         run: |
-          python3 -m pip install --break-system-externally-allowed aqtinstall
+          python3 -m pip install --break-system-packages aqtinstall
           aqt install-tool linux desktop tools_ifw --outputdir "${{ github.workspace }}/Qt-Tools"
           bc="$(find "${{ github.workspace }}/Qt-Tools" -name binarycreator -type f | sort | tail -n 1)"
           test -n "$bc" || { echo "binarycreator not found under Qt-Tools"; exit 1; }
