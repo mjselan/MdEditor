@@ -42,6 +42,101 @@ jobs:
       - name: Configure release preset
         run: cmake --preset release
 
+  build-test-windows:
+    # Native MSVC build + tests, then the offline installer via the
+    # Installer/Windows scripts (windeploy.bat + make-installer.bat).
+    # The exe attached to a GitHub Release is uploaded from the artifact
+    # produced here (see release.yml).
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Setup MSVC environment
+        uses: ilammy/msvc-dev-cmd@v1
+        with:
+          arch: x64
+
+      - name: Check Windows build tools
+        shell: cmd
+        run: |
+          cmake --version
+          ninja --version
+
+      - name: Install Qt 6.11 (msvc2022_64)
+        uses: jurplel/install-qt-action@v4
+        with:
+          version: 6.11.1
+          host: windows
+          target: desktop
+          arch: win64_msvc2022_64
+          cache: true
+
+      - name: Export Qt prefix for CMake and windeployqt
+        shell: pwsh
+        run: |
+          $qtPrefix = (qmake6 -query QT_INSTALL_PREFIX)
+          if (-not $qtPrefix) { throw "qmake6 not found on PATH" }
+          "QT_DIR=$qtPrefix" >> $env:GITHUB_ENV
+          foreach ($tool in "windeployqt6.exe", "windeployqt.exe") {
+            if (Test-Path (Join-Path $qtPrefix "bin/$tool")) { break }
+          }
+          if (-not (Test-Path (Join-Path $qtPrefix "bin/$tool"))) {
+            throw "neither windeployqt6.exe nor windeployqt.exe found under $qtPrefix/bin"
+          }
+
+      - name: Cache Qt Installer Framework
+        id: cache-ifw
+        uses: actions/cache@v4
+        with:
+          path: ${{ github.workspace }}/Qt-Tools
+          key: windows-tools-ifw-v1
+
+      - name: Install Qt Installer Framework
+        if: steps.cache-ifw.outputs.cache-hit != 'true'
+        shell: pwsh
+        run: |
+          pip install aqtinstall
+          aqt install-tool windows desktop tools_ifw --outputdir "${{ github.workspace }}/Qt-Tools"
+
+      - name: Export IFW bin dir
+        shell: pwsh
+        run: |
+          $bc = Get-ChildItem -Path "${{ github.workspace }}/Qt-Tools" -Recurse -Filter binarycreator.exe |
+            Sort-Object FullName | Select-Object -Last 1
+          if (-not $bc) { throw "binarycreator.exe not found under Qt-Tools" }
+          "IFW_BIN=$($bc.Directory.FullName)" >> $env:GITHUB_ENV
+
+      - name: Configure Windows debug preset
+        shell: cmd
+        run: cmake --preset debug
+
+      - name: Build Windows debug preset
+        shell: cmd
+        run: cmake --build --preset debug
+
+      - name: Run Windows tests
+        # test_core forces QT_QPA_PLATFORM=offscreen itself.
+        shell: cmd
+        run: ctest --preset debug
+
+      - name: Build Windows offline installer
+        # VSCMD_VER is set by msvc-dev-cmd, so windeploy.bat invokes cmake
+        # directly instead of re-entering tools\windows\devcmd.bat.
+        shell: cmd
+        run: |
+          Installer\Windows\windeploy.bat
+          Installer\Windows\make-installer.bat
+
+      - name: Upload Windows installer artifact
+        # v7 runs on Node.js 24 and avoids the deprecated Node.js 20 runtime.
+        # CI artifacts are temporary; the permanent copy is the Release asset.
+        uses: actions/upload-artifact@v7
+        with:
+          name: MarkdownEditor-windows
+          path: Installer/Windows/MarkdownEditor-*-offline.exe
+          if-no-files-found: error
+          retention-days: 90
+
   build-test-macos:
     # Build and test the native app, then publish a universal DMG as an
     # Actions artifact. The downloadable copy attached to a GitHub Release

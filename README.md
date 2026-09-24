@@ -4,7 +4,7 @@ Type Markdown on the left, see it rendered on the right. Runs on Linux, Windows,
 macOS, follows your system light/dark theme, and exports to HTML and PDF. No account
 and no network access required. Licensed GPL-3.0-or-later.
 
-**Download:** Available installers are published on the [Releases](https://github.com/mjselan/MdEditor/releases) page. Windows and macOS can also be built from source using the packaging instructions below.
+**Download:** Installers for Windows, macOS, and Linux are published on the [Releases](https://github.com/mjselan/MdEditor/releases) page — pushing a `v*` tag builds and attaches all three automatically. Every platform can also be built from source using the packaging instructions below.
 
 ![Markdown Editor screenshot](Screenshot.png)
 
@@ -108,7 +108,7 @@ rem 2. Assemble the offline installer (binarycreator).
 tools\windows\devcmd.bat Installer\Windows\make-installer.bat
 ```
 
-The result is `Installer\Windows\MarkdownEditor-<version>-offline.exe` (~54 MB; version parsed from `CMakeLists.txt`). No `vc_redist` bootstrapper is needed — the CRT DLLs (`vcruntime140.dll`, `vcruntime140_1.dll`, `msvcp140.dll`) are bundled next to the exe. What exactly gets staged is detailed in [docs/packaging.md](docs/packaging.md).
+The result is `Installer\Windows\MarkdownEditor-<version>-offline.exe` (~54 MB; version parsed from `CMakeLists.txt`). No `vc_redist` bootstrapper is needed — the CRT DLLs (`vcruntime140.dll`, `vcruntime140_1.dll`, `msvcp140.dll`) are bundled next to the exe. CI builds the same installer on every push (`build-test-windows` job) and tagged pushes publish it to the Releases page. What exactly gets staged is detailed in [docs/packaging.md](docs/packaging.md).
 
 ### Installing
 
@@ -145,8 +145,9 @@ QT_DIR="$(brew --prefix qt)" ./Installer/MacOS/macdeploy.sh
 
 The generated `.dmg` and staged app are ignored build artifacts; rerun the
 scripts to recreate them. The CI workflow also builds this universal DMG on
-macOS and exposes it as an Actions artifact; the copy attached to a GitHub
-Release is maintained separately. Deploy steps, installer formats, and signing
+macOS and exposes it as an Actions artifact; pushing a `v*` tag attaches it
+(together with the Windows and Linux installers) to the GitHub Release
+automatically. Deploy steps, installer formats, and signing
 notes are detailed in [docs/packaging.md](docs/packaging.md).
 
 For a locally testable installer without Qt Installer Framework, run:

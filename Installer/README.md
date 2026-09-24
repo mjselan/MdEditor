@@ -28,3 +28,8 @@ QT_DIR=$HOME/Qt/6.11.1/gcc_64 ./Installer/Linux/linuxdeploy.sh
 ```
 
 Generated installer payloads and disk images are ignored by Git.
+
+CI builds the Windows installer on every push (`build-test-windows` in
+`.github/workflows/ci.yml`) and pushing a `v*` tag builds all three
+platform installers and attaches them to the matching GitHub Release
+(`.github/workflows/release.yml`); see `docs/packaging.md`.

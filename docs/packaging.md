@@ -23,6 +23,35 @@ Into `Installer\Windows\packages\com.mdeditor.markdowneditor\data` (gitignored):
 
 The layout matches Sonnet's runtime search paths (`<exeDir>/kf6/sonnet` for client plugins, `<exeDir>/data/hunspell` for dictionaries), so the installed app needs no environment variables. No `vc_redist` bootstrapper is needed — the CRT DLLs (`vcruntime140.dll`, `vcruntime140_1.dll`, `msvcp140.dll`) are bundled next to the exe.
 
+### Windows CI and releases
+
+Every push and pull request builds the Windows installer on GitHub Actions
+(`build-test-windows` in `.github/workflows/ci.yml`: MSVC via
+`ilammy/msvc-dev-cmd`, Qt 6.11 via `install-qt-action`, Installer Framework
+via `aqtinstall`). The scripts detect that environment automatically:
+`windeploy.bat` calls `cmake` directly when `VSCMD_VER` is set, honors
+`QT_DIR` / `VC_REDIST_ROOT` overrides, and discovers the Visual Studio
+redist, `windeployqt`, and `binarycreator` instead of assuming fixed
+`C:\Qt` paths. The resulting `MarkdownEditor-<version>-offline.exe` is kept
+as a CI artifact for 90 days; the permanent copy is the asset on the GitHub
+Release.
+
+Pushing a version tag builds all three platform installers and attaches them
+to the matching release automatically (`.github/workflows/release.yml`):
+
+```bash
+git tag v1.0.1 && git push origin v1.0.1
+```
+
+The installer filename carries the tag version (`MARKDOWNEDITOR_VERSION`),
+so it matches the release even when `CMakeLists.txt` still has the previous
+version. To re-attach or replace a Windows asset manually:
+
+```powershell
+gh release upload v1.0.1 `
+  Installer/Windows/MarkdownEditor-1.0.1-offline.exe --clobber
+```
+
 ## macOS: `macdeploy.sh` steps and formats
 
 `macdeploy.sh` performs these steps:
@@ -80,9 +109,10 @@ signature and notarization (`CODESIGN_IDENTITY` is passed through to
 
 ### Publishing the DMG to an existing GitHub release
 
-The repository does not need a special Metal runtime or an extra installer
-package. GitHub CLI is only needed by the release maintainer when attaching
-the generated DMG:
+Pushing a `v*` tag attaches the DMG (plus the Windows and Linux installers)
+to the matching release automatically via `.github/workflows/release.yml`.
+GitHub CLI is only needed by the release maintainer when (re-)attaching the
+generated DMG manually:
 
 ```bash
 brew install gh
