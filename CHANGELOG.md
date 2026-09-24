@@ -3,7 +3,7 @@
 All notable changes to Markdown Editor are documented here. The format is
 loosely based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
-## [Unreleased]
+## [1.0.1] - 2026-09-24
 
 ### Added
 - `Help → About` dialog showing the application version (from
@@ -13,6 +13,11 @@ loosely based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 - `MARKDOWNEDITOR_SPELLCHECK` option (`AUTO`/`ON`/`OFF`); `ON` fails the
   configure step when Sonnet is missing instead of silently disabling.
 - Ubuntu CI workflow (configure, build, test).
+- Windows CI job (MSVC build, tests, offline installer artifact).
+- Release workflow: pushing a `v*` tag builds the Windows, Linux, and
+  macOS installers and attaches them to the GitHub Release.
+- `MARKDOWNEDITOR_VERSION` override for the installer filenames.
+- `MARKDOWNEDITOR_SKIP_BUILD` hatch for `windeploy.bat`.
 - Windows helper scripts (`tools/windows/`) for the MSVC environment and
   the Sonnet/prefix provisioning, so the documented Windows build works
   from a fresh clone.
@@ -30,6 +35,11 @@ loosely based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 ### Fixed
 - Test suite runs headless (`QT_QPA_PLATFORM=offscreen`), fixing CI and
   server runs without a display.
+- Windows installer scripts no longer assume fixed `C:\Qt` paths: Visual
+  Studio redist, `windeployqt`, and `binarycreator` are auto-detected with
+  `QT_DIR` / `VC_REDIST_ROOT` / `IFW_BIN` overrides.
+- Fixed a `cmd.exe` parse error (`. was unexpected`) from a `")."` echo
+  inside a `windeploy.bat` block; CI invokes the scripts with `call`.
 
 ## [1.0.0] - 2026-09-23
 
