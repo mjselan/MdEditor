@@ -1,8 +1,11 @@
 # Markdown Editor
+lightweight, offline Markdown editor with live preview, built with Qt 6 and C++20.
+Type Markdown on the left, see it rendered on the right. Runs on Linux, Windows, and
+macOS, follows your system light/dark theme, and exports to HTML and PDF. No account
+and no network access required. Licensed GPL-3.0-or-later.
 
-Write beautifully, everywhere. Markdown Editor is a **free, open-source writing app** for notes, documents, and READMEs — you type in plain text on the left, and a polished preview appears live on the right. No accounts, no subscriptions, no internet required. It runs on **Windows, macOS, and Linux**, follows your system's light/dark mode, and exports your work to HTML or PDF.
-
-Ready-to-install packages are published on the [Releases page](https://github.com/mjselan/MdEditor/releases) as they become available (Linux available now).
+**Download:** Linux installer on the [Releases](https://github.com/mjselan/MdEditor/releases)
+page. Windows and macOS: [build from source](#build) for now.
 
 ![Markdown Editor screenshot](Screenshot.png)
 
