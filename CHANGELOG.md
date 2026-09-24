@@ -3,6 +3,13 @@
 All notable changes to Markdown Editor are documented here. The format is
 loosely based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
+## [1.0.2] - 2026-09-24
+
+### Fixed
+- Correct `pip` flag (`--break-system-packages`) for installing
+  `aqtinstall` on Ubuntu 24.04, unblocking the Linux release job
+  (the `v1.0.1` release run failed on that step).
+
 ## [1.0.1] - 2026-09-24
 
 ### Added
