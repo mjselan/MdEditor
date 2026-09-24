@@ -81,3 +81,4 @@ Installer/MacOS/*.dmg
 Installer/MacOS/*.app
 Installer/Linux/*.run
 InstallationLog.txt
+aqtinstall.log
