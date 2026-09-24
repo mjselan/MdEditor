@@ -4,8 +4,7 @@ Type Markdown on the left, see it rendered on the right. Runs on Linux, Windows,
 macOS, follows your system light/dark theme, and exports to HTML and PDF. No account
 and no network access required. Licensed GPL-3.0-or-later.
 
-**Download:** Linux installer on the [Releases](https://github.com/mjselan/MdEditor/releases)
-page. Windows and macOS: [build from source](#build) for now.
+**Download:** Available installers are published on the [Releases](https://github.com/mjselan/MdEditor/releases) page. Windows and macOS can also be built from source using the packaging instructions below.
 
 ![Markdown Editor screenshot](Screenshot.png)
 
@@ -135,9 +134,20 @@ export QT_DIR="$(brew --prefix qt)"       # omit if Qt is already discoverable
 ./Installer/MacOS/make-installer.sh             # create a native drag-and-drop DMG
 ```
 
+For a DMG that runs natively on both Intel and Apple Silicon Macs, use the
+universal preset:
+
+```bash
+MARKDOWNEDITOR_PRESET=macos-universal \
+QT_DIR="$(brew --prefix qt)" ./Installer/MacOS/macdeploy.sh
+./Installer/MacOS/make-installer.sh
+```
+
 The generated `.dmg` and staged app are ignored build artifacts; rerun the
-scripts to recreate them. Deploy steps, installer formats, and signing notes
-are detailed in [docs/packaging.md](docs/packaging.md).
+scripts to recreate them. The CI workflow also builds this universal DMG on
+macOS and exposes it as an Actions artifact; the copy attached to a GitHub
+Release is maintained separately. Deploy steps, installer formats, and signing
+notes are detailed in [docs/packaging.md](docs/packaging.md).
 
 For a locally testable installer without Qt Installer Framework, run:
 

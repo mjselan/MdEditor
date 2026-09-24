@@ -58,13 +58,42 @@ The layout matches Sonnet's runtime search paths (`<exeDir>/kf6/sonnet` for clie
 
 Both formats contain the same deployed app bundle. Windows and macOS use
 separate IFW package data directories, so their staging jobs do not overwrite
-one another. Build on the architecture being distributed (for example,
-configure an arm64 Qt kit for Apple Silicon); a single build is not
-automatically a universal binary. Set
-`CMAKE_OSX_DEPLOYMENT_TARGET` to the oldest macOS release you intend to
-support when configuring the build. Ad-hoc signing is sufficient for local
-testing; public distribution needs a Developer ID signature and notarization
-(`CODESIGN_IDENTITY` is passed through to `macdeployqt6` when set).
+one another. The default `release` build follows the host architecture. For
+a DMG that runs natively on both Intel and Apple Silicon Macs, use the
+`macos-universal` preset:
+
+```bash
+MARKDOWNEDITOR_PRESET=macos-universal \
+QT_DIR=/path/to/Qt/6.11.1/macos ./Installer/MacOS/macdeploy.sh
+./Installer/MacOS/make-installer.sh
+```
+
+That preset builds `arm64;x86_64` with a macOS 13.0 deployment target. The
+Qt 6.11 kit used for the release must itself contain both architectures. A
+release built only for x86_64 requires Rosetta 2 on Apple Silicon; Apple
+Metal is a graphics API supplied by macOS/Qt and does not require a separate
+runtime installation. Set `CMAKE_OSX_DEPLOYMENT_TARGET` to the oldest macOS
+release you intend to support when using another preset. Ad-hoc signing is
+sufficient for local testing; public distribution needs a Developer ID
+signature and notarization (`CODESIGN_IDENTITY` is passed through to
+`macdeployqt6` when set).
+
+### Publishing the DMG to an existing GitHub release
+
+The repository does not need a special Metal runtime or an extra installer
+package. GitHub CLI is only needed by the release maintainer when attaching
+the generated DMG:
+
+```bash
+brew install gh
+gh auth login
+gh release upload v1.0.0 \
+  Installer/MacOS/MarkdownEditor-1.0.0.dmg --clobber
+```
+
+The universal build avoids requiring Rosetta 2 on Apple Silicon. Its Qt
+runtime is bundled by `macdeployqt6`; users only need a compatible macOS
+version (macOS 13.0 or newer for this preset).
 
 ## Linux: what `linuxdeploy.sh` stages
 

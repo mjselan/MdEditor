@@ -20,6 +20,9 @@ tools\windows\devcmd.bat Installer\Windows\windeploy.bat
 tools\windows\devcmd.bat Installer\Windows\make-installer.bat
 ./Installer/MacOS/macdeploy.sh
 ./Installer/MacOS/make-installer.sh
+# Universal Intel + Apple Silicon:
+# MARKDOWNEDITOR_PRESET=macos-universal ./Installer/MacOS/macdeploy.sh
+# ./Installer/MacOS/make-installer.sh
 QT_DIR=$HOME/Qt/6.11.1/gcc_64 ./Installer/Linux/linuxdeploy.sh
 ./Installer/Linux/make-installer.sh
 ```

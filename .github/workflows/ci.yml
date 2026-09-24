@@ -41,3 +41,60 @@ jobs:
 
       - name: Configure release preset
         run: cmake --preset release
+
+  build-test-macos:
+    # Build and test the native app, then publish a universal DMG as an
+    # Actions artifact. The downloadable copy attached to a GitHub Release
+    # is still managed separately by the release process.
+    runs-on: macos-14
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Check macOS build tools
+        run: |
+          cmake --version
+          ninja --version
+
+      - name: Install Qt 6.11 (macOS universal)
+        uses: jurplel/install-qt-action@v4
+        with:
+          version: 6.11.1
+          host: mac
+          target: desktop
+          arch: clang_64
+          cache: true
+
+      - name: Export Qt prefix for CMake and macdeployqt
+        shell: bash
+        run: |
+          if command -v qmake6 >/dev/null 2>&1; then
+            qt_prefix="$(qmake6 -query QT_INSTALL_PREFIX)"
+          else
+            qt_prefix="$(qmake -query QT_INSTALL_PREFIX)"
+          fi
+          echo "QT_DIR=${qt_prefix}" >> "$GITHUB_ENV"
+          test -x "${qt_prefix}/bin/macdeployqt6"
+
+      - name: Configure macOS debug preset
+        run: cmake --preset debug
+
+      - name: Build macOS debug preset
+        run: cmake --build --preset debug
+
+      - name: Run macOS tests
+        run: ctest --preset debug
+
+      - name: Build universal macOS DMG
+        env:
+          MARKDOWNEDITOR_PRESET: macos-universal
+        run: |
+          ./Installer/MacOS/macdeploy.sh
+          ./Installer/MacOS/make-installer.sh
+
+      - name: Upload macOS DMG artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: MarkdownEditor-macos-universal
+          path: Installer/MacOS/MarkdownEditor-*.dmg
+          if-no-files-found: error
+          retention-days: 14
