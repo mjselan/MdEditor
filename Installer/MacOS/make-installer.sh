@@ -135,8 +135,10 @@ APP_EXECUTABLE="$(app_executable "$APP_PATH" || true)"
 # its main executable.  This catches an accidentally linked non-Qt library
 # (for example a system Sonnet) before it is hidden inside a DMG.
 if command -v otool >/dev/null 2>&1; then
-    # otool's first line is the inspected file path, not a dependency.
-    dependencies="$(otool -L "$APP_EXECUTABLE" 2>/dev/null | sed '1d' || true)"
+    # Keep only dependency lines.  On a universal binary otool emits one
+    # "architecture ..." header per slice, and those headers contain the
+    # inspected path even though the actual dependencies are relocatable.
+    dependencies="$(otool -L "$APP_EXECUTABLE" 2>/dev/null | sed -n '/^[[:space:]]/p' || true)"
     for forbidden_path in "$REPO_ROOT" "/Users/" "/opt/" "/usr/local/"; do
         if printf '%s\n' "$dependencies" | grep -F "$forbidden_path" >/dev/null 2>&1; then
             die "staged app still depends on a build-machine path ($forbidden_path); rebuild without that dependency or deploy it into the bundle"
