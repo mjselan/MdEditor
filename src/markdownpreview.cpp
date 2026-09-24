@@ -68,6 +68,12 @@ void MarkdownPreview::setScrollRatio(double ratio)
     bar->setValue(qRound(ratio * double(bar->maximum())));
 }
 
+void MarkdownPreview::resetScroll()
+{
+    m_lastRatio = 0.0;
+    setScrollRatio(0.0);
+}
+
 QVariant MarkdownPreview::loadResource(int type, const QUrl &name)
 {
     if (type == QTextDocument::ImageResource && name.isRelative() && !m_documentDir.isEmpty()) {

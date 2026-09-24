@@ -1,8 +1,12 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 #include "theme.h"
 
+#include <memory>
+
 #include <QGuiApplication>
 #include <QJsonObject>
+#include <QStyle>
+#include <QStyleFactory>
 #include <QStyleHints>
 
 namespace theme {
@@ -101,7 +105,13 @@ QHash<QString, QColor> tableFor(const SyntaxScheme &s)
 
 QPalette paletteFor(Mode mode)
 {
-    QPalette pal;
+    // Deterministic base: a default-constructed QPalette copies the current
+    // application palette, so it is dark on a dark OS (breaking Light mode)
+    // and leaks light OS roles into dark mode. Fusion's standard palette is
+    // always light and available wherever QtWidgets is.
+    const std::unique_ptr<QStyle> fusion(
+        QStyleFactory::create(QStringLiteral("Fusion")));
+    QPalette pal = fusion ? fusion->standardPalette() : QPalette();
     if (!isDark(mode))
         return pal;
 

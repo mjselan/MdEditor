@@ -83,6 +83,17 @@ QTextCharFormat makeFormat(const QColor &color, bool bold = false, bool italic =
     return f;
 }
 
+// Inline links, images, and autolinks. Groups: 1 = visible text,
+// 2 = link target, 3 = autolink URL. Shared by the visual link rule and
+// codeSegments() (QRegularExpression is implicitly shared, so copies
+// are cheap).
+const QRegularExpression &linkPattern()
+{
+    static const QRegularExpression re(QStringLiteral(
+        "!?\\[([^\\]]*)\\]\\(([^)\\s]+)(?:\\s+\\\"[^\\\"]*\\\")?\\)|<([^\\s>]+)>"));
+    return re;
+}
+
 } // namespace
 
 class MarkdownHighlighter::Private
@@ -94,18 +105,19 @@ public:
     QRegularExpression italic{ QStringLiteral(
         "(?<![\\*\\w])\\*(?=[^\\s\\*])(.+?)(?<=[^\\s\\*])\\*(?![\\*\\w])|(?<![\\w_])_(?=[^\\s_])(.+?)(?<=[^\\s_])_(?![\\w_])") };
     QRegularExpression strike{ QStringLiteral("~~(?=\\S)(.+?)(?<=\\S)~~") };
-    QRegularExpression link{ QStringLiteral(
-        "!?\\[([^\\]]*)\\]\\(([^)\\s]+)(?:\\s+\\\"[^\\\"]*\\\")?\\)|<([^\\s>]+)>") };
+    QRegularExpression link{ linkPattern() };
 };
 
 MarkdownHighlighter::MarkdownHighlighter(QTextDocument *document)
     : QSyntaxHighlighter(document)
-    , d(new Private)
+    , d(std::make_unique<Private>())
 {
     m_misspelledFormat.setFontUnderline(true);
     m_misspelledFormat.setUnderlineStyle(QTextCharFormat::SpellCheckUnderline);
     m_misspelledFormat.setToolTip(QObject::tr("Spelling mistake"));
 }
+
+MarkdownHighlighter::~MarkdownHighlighter() = default;
 
 void MarkdownHighlighter::setColors(const QHash<QString, QColor> &colors)
 {
@@ -255,6 +267,16 @@ QVector<QPair<int, int>> MarkdownHighlighter::codeSegments(const QString &text)
     if (isOpenFence(text))
         spans.append({ 0, text.size() });
     spans.append(inlineCodeSpans(text));
+    // Link targets and autolinks are never spell checked (only the visible
+    // link text is). The pattern is shared with the visual link rule below.
+    auto it = linkPattern().globalMatch(text);
+    while (it.hasNext()) {
+        const auto m = it.next();
+        if (!m.captured(2).isEmpty())
+            spans.append({ m.capturedStart(2), m.capturedLength(2) });
+        else if (!m.captured(3).isEmpty())
+            spans.append({ m.capturedStart(3), m.capturedLength(3) });
+    }
     return spans;
 }
 
@@ -279,8 +301,19 @@ void MarkdownHighlighter::spellCheck(const QString &text)
                 break;
             }
         }
-        if (!inCode && !m_spell->isWordCorrect(m.captured()))
-            setFormat(start, length, m_misspelledFormat);
+        if (!inCode && !m_spell->isWordCorrect(m.captured())) {
+            // Merge the underline into the existing per-character formats:
+            // a plain setFormat() would replace them and strip colors,
+            // bold/heading styles, and link underlines.
+            for (int i = start; i < start + length; ++i) {
+                QTextCharFormat merged = format(i);
+                merged.setFontUnderline(true);
+                merged.setUnderlineStyle(QTextCharFormat::SpellCheckUnderline);
+                merged.setUnderlineColor(m_misspelledFormat.underlineColor());
+                merged.setToolTip(m_misspelledFormat.toolTip());
+                setFormat(i, 1, merged);
+            }
+        }
     }
 }
 
@@ -333,6 +366,14 @@ QVector<QPair<int, QString>> MarkdownHighlighter::headings() const
     QVector<QPair<int, QString>> result;
     QTextBlock block = document()->firstBlock();
     while (block.isValid()) {
+        // Fenced code content (e.g. "# comment" in Python) is not a heading.
+        // userState() is -1 for never-highlighted blocks; those keep the
+        // old behavior rather than being skipped blindly.
+        const int state = block.userState();
+        if (state > StateNone && (state & StateFencedCode)) {
+            block = block.next();
+            continue;
+        }
         QString title;
         const int level = headingLevel(block.text(), &title);
         if (level > 0)

@@ -1,6 +1,8 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 #pragma once
 
+#include <memory>
+
 #include <QObject>
 #include <QStringList>
 
@@ -44,5 +46,5 @@ signals:
 
 private:
     class Impl;
-    Impl *d;
+    std::unique_ptr<Impl> d;
 };

@@ -31,6 +31,11 @@ public slots:
     // Programmatic scroll (from editor sync); does not emit scrollRatioChanged.
     void setScrollRatio(double ratio);
 
+    // Forget the remembered scroll position and jump to the top (e.g. when
+    // opening another file, whose content starts at the top rather than at
+    // the previous document's ratio).
+    void resetScroll();
+
     // Render immediately, bypassing the throttle (e.g. before HTML export).
     void renderNow();
 

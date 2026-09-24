@@ -1,6 +1,8 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 #include "mainwindow.h"
 
+#include <memory>
+
 #include "appicons.h"
 
 #include <QAction>
@@ -435,6 +437,8 @@ void MainWindow::connectSignals()
 
     connect(m_findBar, &FindReplaceBar::findNext, this, &MainWindow::findNext);
     connect(m_findBar, &FindReplaceBar::searchTextChanged, this, &MainWindow::countMatches);
+    connect(m_findBar, &FindReplaceBar::escapePressed, this,
+            [this] { m_editor->setFocus(); });
     connect(m_findBar, &FindReplaceBar::replaceCurrent, this, &MainWindow::replaceCurrent);
     connect(m_findBar, &FindReplaceBar::replaceAll, this, &MainWindow::replaceAll);
 
@@ -459,6 +463,7 @@ void MainWindow::newFile()
         return;
     m_editor->clear();
     setCurrentFile(QString());
+    m_preview->resetScroll();
     updateCounts();
     rebuildOutline();
 }
@@ -490,6 +495,7 @@ bool MainWindow::loadFile(const QString &path)
     setCurrentFile(path);
     addRecentFile(path);
     m_preview->setDocumentDirectory(QFileInfo(path).absolutePath());
+    m_preview->resetScroll();
     updateCounts();
     rebuildOutline();
     return true;
@@ -597,8 +603,7 @@ void MainWindow::exportPdf()
     QPrinter printer(QPrinter::HighResolution);
     printer.setOutputFormat(QPrinter::PdfFormat);
     printer.setOutputFileName(path);
-    m_preview->renderNow(); // ensure the rendered copy is current
-    m_preview->document()->print(&printer);
+    printPreviewDocument(&printer);
     statusBar()->showMessage(tr("Exported to %1").arg(path), 4000);
 }
 
@@ -609,8 +614,24 @@ void MainWindow::printFile()
     dialog.setWindowTitle(tr("Print Document"));
     if (dialog.exec() != QDialog::Accepted)
         return;
+    printPreviewDocument(&printer);
+}
+
+void MainWindow::printPreviewDocument(QPrinter *printer)
+{
     m_preview->renderNow(); // ensure the rendered copy is current
-    m_preview->document()->print(&printer);
+    // Print a clone with black merged over every format: the live document
+    // resolves unset colors from the application palette, which is light
+    // text in dark mode (a post-hoc defaultStyleSheet cannot recolor already
+    // parsed content). Merging is palette-independent; cloning keeps the
+    // live preview and its image resources untouched.
+    std::unique_ptr<QTextDocument> printDoc(m_preview->document()->clone());
+    QTextCursor cursor(printDoc.get());
+    cursor.select(QTextCursor::Document);
+    QTextCharFormat black;
+    black.setForeground(Qt::black);
+    cursor.mergeCharFormat(black);
+    printDoc->print(printer);
 }
 
 // ---------------------------------------------------------------------------
@@ -808,6 +829,13 @@ void MainWindow::rebuildOutline()
     QVector<int> positions;
     const QTextBlock block = m_editor->document()->firstBlock();
     for (QTextBlock b = block; b.isValid(); b = b.next()) {
+        // Fenced code content (e.g. "# comment" in Python) is not a heading.
+        // userState() is -1 for never-highlighted blocks; those keep the
+        // old behavior rather than being skipped blindly.
+        const int state = b.userState();
+        if (state > MarkdownHighlighter::StateNone
+            && (state & MarkdownHighlighter::StateFencedCode))
+            continue;
         QString title;
         const int level = MarkdownHighlighter::headingLevel(b.text(), &title);
         if (level > 0) {
@@ -855,13 +883,28 @@ void MainWindow::showAbout()
 void MainWindow::updateCounts()
 {
     const QString text = m_editor->toPlainText();
-    const int words = int(text.split(QRegularExpression(QStringLiteral("\\s+")),
-                                     Qt::SkipEmptyParts).size());
     const int lines = m_editor->document()->blockCount();
     m_statsLabel->setText(tr("Words: %1    Characters: %2    Lines: %3")
-                              .arg(words)
+                              .arg(wordCount(text))
                               .arg(text.size())
                               .arg(lines));
+}
+
+int MainWindow::wordCount(const QString &text)
+{
+    // One pass, no per-word heap objects (QString::split() used to allocate
+    // a QString per word on every keystroke pause).
+    int words = 0;
+    bool inWord = false;
+    for (const QChar &ch : text) {
+        if (ch.isSpace()) {
+            inWord = false;
+        } else if (!inWord) {
+            inWord = true;
+            ++words;
+        }
+    }
+    return words;
 }
 
 void MainWindow::addRecentFile(const QString &path)

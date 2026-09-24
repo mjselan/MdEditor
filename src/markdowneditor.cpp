@@ -193,12 +193,18 @@ void MarkdownEditor::wrapSelection(const QString &marker)
         const int end = qMax(cursor.anchor(), cursor.position());
         const QString selected = cursor.selectedText();
 
-        // Toggle off when the markers are inside the selection.
+        // Toggle off when the markers surround the selection: replace the
+        // whole [start, end) range with the unmarked inner text.
         if (selected.size() >= 2 * marker.size() && selected.startsWith(marker)
             && selected.endsWith(marker)) {
-            cursor.setPosition(start + marker.size());
-            cursor.setPosition(end - marker.size(), QTextCursor::KeepAnchor);
-            cursor.insertText(selected.mid(marker.size(), selected.size() - 2 * marker.size()));
+            const QString inner =
+                selected.mid(marker.size(), selected.size() - 2 * marker.size());
+            cursor.setPosition(start);
+            cursor.setPosition(end, QTextCursor::KeepAnchor);
+            cursor.insertText(inner);
+            // Leave the unwrapped text selected, mirroring the wrap path.
+            cursor.setPosition(start);
+            cursor.setPosition(start + inner.size(), QTextCursor::KeepAnchor);
             cursor.endEditBlock();
             setTextCursor(cursor);
             return;
@@ -318,11 +324,20 @@ void MarkdownEditor::toggleFencedCodeBlock()
         last = document()->lastBlock();
 
     static const QRegularExpression fence(QStringLiteral("^\\s*(```|~~~)\\s*$"));
+    // A lone fence line (first == last) unwraps to nothing: removing "both"
+    // fence ranges from one block would eat the neighboring line, and
+    // wrapping it in another fence is never what was asked.
     if (fence.match(first.text()).hasMatch() && fence.match(last.text()).hasMatch()) {
-        // Unwrap: remove both fence lines.
+        if (first == last)
+            return;
+        // Unwrap: remove both fence lines. QTextBlock::length() covers the
+        // block separator, which past the last block is not a valid cursor
+        // position, so clamp the range.
+        const int lastEnd = qMin(last.position() + last.length(),
+                                 document()->characterCount() - 1);
         cursor.beginEditBlock();
         cursor.setPosition(last.position());
-        cursor.setPosition(last.position() + last.length(), QTextCursor::KeepAnchor);
+        cursor.setPosition(lastEnd, QTextCursor::KeepAnchor);
         cursor.insertText(QString());
         cursor.setPosition(first.position());
         cursor.setPosition(first.position() + first.length(), QTextCursor::KeepAnchor);
@@ -422,14 +437,14 @@ void MarkdownEditor::keyPressEvent(QKeyEvent *event)
     if (event->key() == Qt::Key_Return && !event->modifiers()
         && !textCursor().hasSelection()) {
         static const QRegularExpression listItem(
-            QStringLiteral("^(\\s*)([-*+]|\\d{1,9}[.)])(\\s+)(.*)$"));
+            QStringLiteral("^(\\s*)([-*+]|(\\d{1,9})([.)]))(\\s+)(.*)$"));
         const auto m = listItem.match(textCursor().block().text(),
                                       0, QRegularExpression::NormalMatch,
                                       QRegularExpression::AnchoredMatchOption);
         if (m.hasMatch()) {
             const QString indent = m.captured(1);
             const QString marker = m.captured(2);
-            const QString content = m.captured(4);
+            const QString content = m.captured(6);
 
             QPlainTextEdit::keyPressEvent(event); // insert the newline
             if (content.isEmpty()) {
@@ -438,11 +453,17 @@ void MarkdownEditor::keyPressEvent(QKeyEvent *event)
                 cursor.movePosition(QTextCursor::StartOfBlock, QTextCursor::KeepAnchor);
                 cursor.insertText(indent);
             } else {
+                // Bullets repeat verbatim; numbers increment, keeping the
+                // original delimiter (groups 3/4 only match on numbers, so
+                // a bare toInt() on the marker — which includes "1." — can
+                // never misfire here).
                 QString next = marker;
-                bool ok = false;
-                const int number = marker.toInt(&ok);
-                if (ok)
-                    next = QString::number(number + 1);
+                if (!m.captured(3).isEmpty()) {
+                    bool ok = false;
+                    const int number = m.captured(3).toInt(&ok);
+                    if (ok)
+                        next = QString::number(number + 1) + m.captured(4);
+                }
                 insertPlainText(indent + next + QStringLiteral(" "));
             }
             event->accept();

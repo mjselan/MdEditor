@@ -4,6 +4,7 @@
 #include "markdowneditor.h"
 #include "markdownhighlighter.h"
 #include "appicons.h"
+#include "findreplacebar.h"
 #include "mainwindow.h"
 #include "markdownpreview.h"
 #include "spellchecker.h"
@@ -43,6 +44,15 @@ private slots:
     void forEachSelectedLineSelectionEndsBeforeLineEnd();
     void forEachSelectedLineWholeDocumentMultiLine();
     void indentSelectionExactOutput();
+    void numberedListContinuationIncrements();
+    void boldToggleUnwrapsSelection();
+    void fencedCodeSingleLineUnwrapKeepsNeighbor();
+    void headingsSkipFencedCode();
+    void wordCountCases();
+    void codeSegmentsExcludeLinkTargets();
+    void searchChangedIsDebounced();
+    void escapeHidesBarAndSignals();
+    void themeLightIndependentOfAppPalette();
     void previewRendersDocumentSource();
     void previewThrottleRendersAtMostOncePerInterval();
     void matchCountingDoesNotNeedCaret();
@@ -304,6 +314,192 @@ void TestCore::indentSelectionExactOutput()
     editor.setTextCursor(cursor);
     QTest::keyClick(&editor, Qt::Key_Backtab, Qt::ShiftModifier);
     QCOMPARE(editor.toPlainText(), QStringLiteral("alpha\nbeta tail\ngamma"));
+}
+
+void TestCore::numberedListContinuationIncrements()
+{
+    // Regression: marker.toInt() on "1." always failed, so Enter repeated
+    // the same number instead of incrementing it.
+    {
+        MarkdownEditor editor;
+        editor.setPlainText(QStringLiteral("1. item"));
+        QTextCursor cursor = editor.textCursor();
+        cursor.movePosition(QTextCursor::End);
+        editor.setTextCursor(cursor);
+        QTest::keyClick(&editor, Qt::Key_Return);
+        QCOMPARE(editor.toPlainText(), QStringLiteral("1. item\n2. "));
+    }
+    {
+        MarkdownEditor editor;
+        editor.setPlainText(QStringLiteral("1) item"));
+        QTextCursor cursor = editor.textCursor();
+        cursor.movePosition(QTextCursor::End);
+        editor.setTextCursor(cursor);
+        QTest::keyClick(&editor, Qt::Key_Return);
+        QCOMPARE(editor.toPlainText(), QStringLiteral("1) item\n2) "));
+    }
+    {
+        MarkdownEditor editor;
+        editor.setPlainText(QStringLiteral("- item"));
+        QTextCursor cursor = editor.textCursor();
+        cursor.movePosition(QTextCursor::End);
+        editor.setTextCursor(cursor);
+        QTest::keyClick(&editor, Qt::Key_Return);
+        QCOMPARE(editor.toPlainText(), QStringLiteral("- item\n- "));
+    }
+}
+
+void TestCore::boldToggleUnwrapsSelection()
+{
+    // Regression: unwrapping selected "**word**" replaced the inner text
+    // with itself and left the markers in place.
+    {
+        MarkdownEditor editor;
+        editor.setPlainText(QStringLiteral("**word**"));
+        selectRange(editor, 0, 8);
+        editor.toggleBold();
+        QCOMPARE(editor.toPlainText(), QStringLiteral("word"));
+    }
+    {
+        MarkdownEditor editor;
+        editor.setPlainText(QStringLiteral("word"));
+        selectRange(editor, 0, 4);
+        editor.toggleBold();
+        QCOMPARE(editor.toPlainText(), QStringLiteral("**word**"));
+    }
+}
+
+void TestCore::fencedCodeSingleLineUnwrapKeepsNeighbor()
+{
+    // Regression: unwrapping when first == last deleted the fence line and
+    // then the line that slid into its position.
+    {
+        MarkdownEditor editor;
+        editor.setPlainText(QStringLiteral("```\ncode"));
+        QTextCursor cursor = editor.textCursor();
+        cursor.movePosition(QTextCursor::Start);
+        editor.setTextCursor(cursor);
+        editor.toggleFencedCodeBlock();
+        QCOMPARE(editor.toPlainText(), QStringLiteral("```\ncode"));
+    }
+    // Multi-line unwrap still removes both fences.
+    {
+        MarkdownEditor editor;
+        editor.setPlainText(QStringLiteral("```\ncode\n```"));
+        QTextCursor cursor = editor.textCursor();
+        cursor.movePosition(QTextCursor::Start);
+        cursor.movePosition(QTextCursor::End, QTextCursor::KeepAnchor);
+        editor.setTextCursor(cursor);
+        editor.toggleFencedCodeBlock();
+        // Both fence lines are gone; the surviving trailing empty block
+        // contributes the final newline.
+        QCOMPARE(editor.toPlainText(), QStringLiteral("code\n"));
+    }
+}
+
+void TestCore::headingsSkipFencedCode()
+{
+    // Regression: "# comment" lines inside fenced code blocks polluted the
+    // outline.
+    QTextDocument doc;
+    MarkdownHighlighter highlighter(&doc);
+    highlighter.setColors(theme::syntaxColors(theme::Mode::Light));
+    doc.setPlainText(QStringLiteral("# real\n```python\n# not heading\n```\n## also real"));
+    highlighter.rehighlight();
+
+    const auto headings = highlighter.headings();
+    QCOMPARE(headings.size(), 2);
+    QCOMPARE(headings.at(0).first, 1);
+    QCOMPARE(headings.at(0).second, QStringLiteral("real"));
+    QCOMPARE(headings.at(1).first, 2);
+    QCOMPARE(headings.at(1).second, QStringLiteral("also real"));
+}
+
+void TestCore::wordCountCases()
+{
+    QCOMPARE(MainWindow::wordCount(QString()), 0);
+    QCOMPARE(MainWindow::wordCount(QStringLiteral("   ")), 0);
+    QCOMPARE(MainWindow::wordCount(QStringLiteral("hello")), 1);
+    QCOMPARE(MainWindow::wordCount(QStringLiteral("  a  b\tc\nd ")), 4);
+    QCOMPARE(MainWindow::wordCount(QStringLiteral("one\n\ntwo")), 2);
+}
+
+void TestCore::codeSegmentsExcludeLinkTargets()
+{
+    const QString text =
+        QStringLiteral("[text](https://example.com/x) and <https://a.b/c>");
+    const auto spans = MarkdownHighlighter::codeSegments(text);
+
+    const int targetStart = text.indexOf(QStringLiteral("https://example"));
+    QVERIFY(targetStart >= 0);
+    QVERIFY(spans.contains(QPair<int, int>(targetStart, 21)));
+
+    const int autoStart = text.indexOf(QStringLiteral("https://a.b"));
+    QVERIFY(autoStart >= 0);
+    QVERIFY(spans.contains(QPair<int, int>(autoStart, 13)));
+
+    // The visible link text itself stays spell checked.
+    const int linkTextPos = 1; // the "text" in "[text](...)"
+    for (const auto &span : spans)
+        QVERIFY(!(span.first <= linkTextPos && linkTextPos < span.first + span.second));
+}
+
+void TestCore::searchChangedIsDebounced()
+{
+    FindReplaceBar bar;
+    QSignalSpy spy(&bar, &FindReplaceBar::searchTextChanged);
+
+    bar.showForFind();
+    QTest::qWait(300); // debounce interval is 150 ms
+    QCOMPARE(spy.count(), 1);
+
+    // A burst of keystrokes collapses into a single emission.
+    bar.setFindText(QStringLiteral("a"));
+    bar.setFindText(QStringLiteral("ab"));
+    bar.setFindText(QStringLiteral("abc"));
+    QTest::qWait(300);
+    QCOMPARE(spy.count(), 2);
+
+    // Clearing the box reports immediately instead of after the delay.
+    QWidget *field = bar.focusWidget();
+    QVERIFY(field != nullptr);
+    QTest::keyClicks(field, QStringLiteral("xyz"));
+    QTest::qWait(300);
+    const int afterTyping = spy.count();
+    QVERIFY(afterTyping > 2);
+    QTest::keyClick(field, Qt::Key_A, Qt::ControlModifier); // select all
+    QTest::keyClick(field, Qt::Key_Backspace); // delete -> textChanged("")
+    QCOMPARE(spy.count(), afterTyping + 1);
+}
+
+void TestCore::escapeHidesBarAndSignals()
+{
+    FindReplaceBar bar;
+    QSignalSpy spy(&bar, &FindReplaceBar::escapePressed);
+    bar.showForFind();
+    QVERIFY(bar.isVisible());
+
+    QTest::keyClick(&bar, Qt::Key_Escape);
+    QVERIFY(bar.isHidden());
+    QCOMPARE(spy.count(), 1);
+}
+
+void TestCore::themeLightIndependentOfAppPalette()
+{
+    // Regression: QPalette() copies the application palette, so Light mode
+    // returned dark colors on a dark OS (and dark mode inherited unlisted
+    // light OS roles). The scheme must be deterministic either way.
+    const QPalette saved = qApp->palette();
+    qApp->setPalette(theme::paletteFor(theme::Mode::Dark));
+    const QPalette light = theme::paletteFor(theme::Mode::Light);
+    const QPalette dark = theme::paletteFor(theme::Mode::Dark);
+    qApp->setPalette(saved);
+
+    QVERIFY(light.color(QPalette::Window).lightness() > 128);
+    QVERIFY(light.color(QPalette::Base).lightness() > 128);
+    QVERIFY(light.color(QPalette::Text).lightness() < 128);
+    QVERIFY(dark.color(QPalette::Window).lightness() < 128);
+    QVERIFY(dark.color(QPalette::Text).lightness() > 128);
 }
 
 void TestCore::previewRendersDocumentSource()

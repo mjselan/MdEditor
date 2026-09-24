@@ -1,6 +1,8 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 #pragma once
 
+#include <memory>
+
 #include <QColor>
 #include <QHash>
 #include <QSyntaxHighlighter>
@@ -38,6 +40,8 @@ public:
     static FenceInfo decodeFenceState(int state);
 
     explicit MarkdownHighlighter(QTextDocument *document);
+    // Defined in the .cpp (where Private is complete) to allow unique_ptr.
+    ~MarkdownHighlighter() override;
 
     void setColors(const QHash<QString, QColor> &colors);
 
@@ -71,5 +75,5 @@ private:
     QTextCharFormat m_misspelledFormat;
     SpellChecker *m_spell = nullptr;
     class Private;
-    Private *d;
+    std::unique_ptr<Private> d;
 };

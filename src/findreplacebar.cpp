@@ -56,6 +56,14 @@ FindReplaceBar::FindReplaceBar(QWidget *parent)
     connect(m_replaceAllButton, &QPushButton::clicked, this, [this] {
         emit replaceAll(m_find->text(), m_replace->text(), m_matchCase->isChecked());
     });
+
+    // Counting matches scans the whole document; debounce keystrokes so a
+    // burst of typing costs a single scan.
+    m_searchDebounce.setSingleShot(true);
+    m_searchDebounce.setInterval(kSearchDebounceMs);
+    connect(&m_searchDebounce, &QTimer::timeout, this, [this] {
+        emit searchTextChanged(m_find->text(), m_matchCase->isChecked());
+    });
 }
 
 void FindReplaceBar::setFindText(const QString &text)
@@ -107,9 +115,7 @@ void FindReplaceBar::keyPressEvent(QKeyEvent *event)
 {
     if (event->key() == Qt::Key_Escape) {
         hide();
-        setFocus();
-        if (auto *editor = parentWidget())
-            editor->setFocus();
+        emit escapePressed();
         event->accept();
         return;
     }
@@ -125,5 +131,12 @@ void FindReplaceBar::emitFind(bool backward)
 
 void FindReplaceBar::emitSearchChanged()
 {
-    emit searchTextChanged(m_find->text(), m_matchCase->isChecked());
+    if (m_find->text().isEmpty()) {
+        // Clearing the box must clear the status immediately, not after the
+        // debounce delay.
+        m_searchDebounce.stop();
+        emit searchTextChanged(m_find->text(), m_matchCase->isChecked());
+        return;
+    }
+    m_searchDebounce.start(); // restart the quota on every keystroke
 }

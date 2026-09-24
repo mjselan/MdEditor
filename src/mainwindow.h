@@ -10,6 +10,7 @@
 
 class FindReplaceBar;
 class SpellChecker;
+class QPrinter;
 class QTextDocument;
 class MarkdownEditor;
 class MarkdownHighlighter;
@@ -42,6 +43,9 @@ public:
     // caret. Exposed statically for unit testing.
     static int countMatchesInDocument(QTextDocument *document, const QString &text,
                                       bool matchCase);
+    // Single non-allocating pass over the text. Exposed statically for unit
+    // testing.
+    static int wordCount(const QString &text);
 
 protected:
     void closeEvent(QCloseEvent *event) override;
@@ -93,6 +97,10 @@ private:
     bool saveToFile(const QString &path);
     void setCurrentFile(const QString &path);
     bool maybeSave();
+    // Prints the preview through a light stylesheet so dark-mode sessions
+    // produce black-on-white output instead of unreadable light-on-white
+    // text (the preview otherwise inherits the dark application palette).
+    void printPreviewDocument(QPrinter *printer);
 
     void readSettings();
     void writeSettings();

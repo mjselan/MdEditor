@@ -16,7 +16,7 @@ public:
 
 SpellChecker::SpellChecker(QObject *parent)
     : QObject(parent)
-    , d(new Impl)
+    , d(std::make_unique<Impl>())
 {
 }
 

@@ -77,6 +77,10 @@ void paintExportPdf(QPainter &p)
     p.drawPolyline(QVector<QPoint>{ { 6, 3 }, { 14, 3 }, { 18, 7 }, { 18, 21 }, { 6, 21 }, { 6, 3 } });
     p.drawLine(14, 3, 14, 7);
     p.drawLine(14, 7, 18, 7);
+    // "PDF" must fit its 12x8 label box; the base 24px font would clip.
+    QFont f = p.font();
+    f.setPixelSize(6);
+    p.setFont(f);
     p.drawText(QRect(6, 12, 12, 8), Qt::AlignCenter, QStringLiteral("PDF"));
 }
 
@@ -219,6 +223,10 @@ void paintNumberedList(QPainter &p)
     p.drawLine(10, 5, 20, 5);
     p.drawLine(10, 12, 20, 12);
     p.drawLine(10, 19, 20, 19);
+    // Digits must fit their 6x8 label boxes; the base 24px font would clip.
+    QFont f = p.font();
+    f.setPixelSize(7);
+    p.setFont(f);
     p.drawText(QRect(3, 1, 6, 8), Qt::AlignCenter, QStringLiteral("1"));
     p.drawText(QRect(3, 8, 6, 8), Qt::AlignCenter, QStringLiteral("2"));
     p.drawText(QRect(3, 15, 6, 8), Qt::AlignCenter, QStringLiteral("3"));
