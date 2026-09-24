@@ -21,8 +21,9 @@ rem   MARKDOWNEDITOR_SKIP_BUILD=1  reuse the existing build\release tree
 rem                            instead of rebuilding the Release preset.
 rem
 rem When run inside an already-initialized MSVC environment (VSCMD_VER is set,
-rem e.g. GitHub Actions with ilammy/msvc-dev-cmd), cmake is invoked directly;
-rem otherwise the build goes through tools\windows\devcmd.bat.
+rem e.g. GitHub Actions, which exports the vcvars environment to each step),
+rem cmake is invoked directly; otherwise the build goes through
+rem tools\windows\devcmd.bat.
 rem ============================================================================
 setlocal EnableExtensions
 

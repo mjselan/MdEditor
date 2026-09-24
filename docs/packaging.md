@@ -26,9 +26,14 @@ The layout matches Sonnet's runtime search paths (`<exeDir>/kf6/sonnet` for clie
 ### Windows CI and releases
 
 Every push and pull request builds the Windows installer on GitHub Actions
-(`build-test-windows` in `.github/workflows/ci.yml`: MSVC via
-`ilammy/msvc-dev-cmd`, Qt 6.11 via `install-qt-action`, Installer Framework
-via `aqtinstall`). The scripts detect that environment automatically:
+(`build-test-windows` in `.github/workflows/ci.yml`: MSVC via a
+vswhere/vcvars step that exports to `GITHUB_ENV`, Qt via `install-qt-action`,
+Installer Framework via `aqtinstall`). Windows pins Qt **6.10.3** while Linux
+and macOS use 6.11.1: Qt 6.11+ ships the Windows repo in a per-arch split
+layout (`qt6_6111/qt6_6111_msvc2022_64`, no flat `Updates.xml`) which
+aqtinstall ≤ 3.3.0 cannot read, so the 6.11 install fails outright
+([upstream issue](https://github.com/miurahr/aqtinstall/issues/1007)).
+Revisit a uniform Qt once that is fixed; the app itself only requires Qt 6.5+. The scripts detect that environment automatically:
 `windeploy.bat` calls `cmake` directly when `VSCMD_VER` is set, honors
 `QT_DIR` / `VC_REDIST_ROOT` overrides, and discovers the Visual Studio
 redist, `windeployqt`, and `binarycreator` instead of assuming fixed
