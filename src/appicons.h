@@ -55,6 +55,10 @@ QIcon makeIcon(Icon which, const QColor &background);
 // Re-renders the cache (call when the theme changes).
 void refresh(const QColor &background);
 
+// Drops cached pixmaps. Connect to aboutToQuit: the cache is a function
+// static holding paint devices, which must not outlive QGuiApplication.
+void clearCache();
+
 // Icon for `which`, from cache when possible.
 QIcon iconFor(Icon which);
 

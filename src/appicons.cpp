@@ -281,7 +281,9 @@ QIcon makeIcon(Icon which, const QColor &background)
         p.setFont([] {
             QFont f;
             f.setPixelSize(kBase);
-            f.setFamily(QStringLiteral("Segoe UI"));
+            // UI font of the running platform (hardcoding e.g. Segoe UI
+            // renders differently everywhere else).
+            f.setFamily(QGuiApplication::font().family());
             return f;
         }());
         for (const auto &glyph : kGlyphs) {
@@ -301,6 +303,11 @@ void refresh(const QColor &background)
     cache().clear();
     for (int i = 0; i < int(std::size(kGlyphs)); ++i)
         cache().insert(cacheKey(Icon(i), background), makeIcon(Icon(i), background));
+}
+
+void clearCache()
+{
+    cache().clear();
 }
 
 QIcon iconFor(Icon which)

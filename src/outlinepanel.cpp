@@ -25,8 +25,7 @@ void OutlinePanel::setColors(const QColor &window, const QColor &text)
     setPalette(pal);
 }
 
-void OutlinePanel::setHeadings(const QVector<QPair<int, QString>> &headings,
-                               const QVector<int> &blockPositions)
+void OutlinePanel::setHeadings(const QVector<MarkdownHighlighter::Heading> &headings)
 {
     const int previousActive = currentRow();
 
@@ -34,11 +33,9 @@ void OutlinePanel::setHeadings(const QVector<QPair<int, QString>> &headings,
     m_positions.clear();
 
     QFont base = font();
-    int i = -1;
     for (const auto &heading : headings) {
-        ++i;
-        const int level = heading.first;
-        const QString &title = heading.second;
+        const int level = heading.level;
+        const QString &title = heading.title;
 
         auto *item = new QListWidgetItem(QString(4 * (level - 1), QLatin1Char(' ')) + title,
                                          this);
@@ -50,8 +47,7 @@ void OutlinePanel::setHeadings(const QVector<QPair<int, QString>> &headings,
         itemFont.setPointSizeF(base.pointSizeF() - qMin(2, level - 1) * 0.5);
         item->setFont(itemFont);
 
-        m_positions.append(blockPositions.value(i, -1));
-        item->setData(Qt::UserRole + 1, m_positions.size() - 1);
+        m_positions.append(heading.position);
     }
 
     if (previousActive >= 0 && previousActive < count())

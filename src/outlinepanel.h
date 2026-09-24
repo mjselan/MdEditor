@@ -5,6 +5,8 @@
 #include <QListWidget>
 #include <QVector>
 
+#include "markdownhighlighter.h"
+
 class QListWidgetItem;
 
 // Clickable table of contents built from document headings. Entries are
@@ -19,10 +21,9 @@ public:
     void setColors(const QColor &window, const QColor &text);
 
 public slots:
-    // Replace the outline with the given [level, title] headings. Block
-    // positions run parallel to the heading list and drive jump/navigation.
-    void setHeadings(const QVector<QPair<int, QString>> &headings,
-                     const QVector<int> &blockPositions);
+    // Replace the outline with the given headings. Positions drive
+    // jump/navigation and highlight tracking.
+    void setHeadings(const QVector<MarkdownHighlighter::Heading> &headings);
 
     // Highlight the outline entry closest above the given cursor position.
     void setActiveHeading(int cursorPosition);

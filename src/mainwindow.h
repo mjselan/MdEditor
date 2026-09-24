@@ -46,6 +46,10 @@ public:
     // Single non-allocating pass over the text. Exposed statically for unit
     // testing.
     static int wordCount(const QString &text);
+    // Line-ending round trip: saving must not rewrite a file's newlines
+    // (whole-file diffs on Windows). Exposed statically for unit testing.
+    static QString detectLineEnding(const QByteArray &raw);
+    static QByteArray encodeWithLineEnding(const QString &text, const QString &ending);
 
 protected:
     void closeEvent(QCloseEvent *event) override;
@@ -71,6 +75,7 @@ private slots:
     void countMatches(const QString &text, bool matchCase);
     void replaceCurrent(const QString &findText, const QString &replaceText, bool matchCase);
     void replaceAll(const QString &findText, const QString &replaceText, bool matchCase);
+    void onEditorContextMenu(const QPoint &pos);
     void onFindTriggered();
     void onReplaceTriggered();
 
@@ -111,10 +116,17 @@ private:
     void updateRecentMenu();
 
     QString recoveryFilePath() const;
+    QStringList recoveryCandidates() const;
     void attemptRecoveryLoad();
-    void writeRecoveryFile();
     void clearRecoveryFile();
 
+private slots:
+    // Applies a recovery snapshot without prompting; marks the document
+    // modified so the restored work cannot be discarded silently.
+    bool loadRecoveryFile(const QString &path);
+    void writeRecoveryFile();
+
+private:
     MarkdownEditor *m_editor = nullptr;
     MarkdownPreview *m_preview = nullptr;
     OutlinePanel *m_outline = nullptr;
@@ -133,8 +145,11 @@ private:
 
     QString m_currentFile;
     theme::Mode m_themeMode = theme::Mode::Auto;
-    QString m_fontFamily;
-    int m_fontSize = 11;
+    // Scroll-sync reentry guard (see onEditorScrolled/onPreviewScrolled).
+    bool m_syncingScroll = false;
+    // Newline style detected on load ("\n" or "\r\n"); writes convert back
+    // so saving never flips a file's line endings.
+    QString m_lineEnding = QStringLiteral("\n");
 
     // Actions
     QAction *m_actionNew = nullptr;

@@ -18,7 +18,7 @@ and no network access required. Licensed GPL-3.0-or-later.
 - **Editor conveniences**: line-number gutter, current-line highlight, list continuation on Enter, Tab/Shift-Tab indent of list/quote lines
 - **Preview**: Qt's built-in CommonMark + GFM renderer (tables, task lists, strikethrough, fenced code) in a `QTextBrowser`; external links open in the system browser; synchronized scrolling between panes
 - **File management**: New / Open / Save / Save As, Recent Files, drag-and-drop `.md` opening, unsaved-changes indicator (`*` in title) with save prompt on close
-- **Autosave**: recovery snapshot every 30 s (plus on exit) under `QStandardPaths::AppLocalDataLocation`; restore prompt on next launch
+- **Autosave**: recovery snapshot every 30 s while the document has unsaved changes, under `QStandardPaths::AppLocalDataLocation` (one file per process); restore prompt on next launch after a crash; removed on clean exit
 - **Find & Replace** (`Ctrl+F` / `Ctrl+H`) with match-case and wrap-around
 - **Status bar**: word / character / line counts
 - **Light/Dark theme** following the OS setting by default, with manual override (persisted)

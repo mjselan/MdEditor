@@ -14,6 +14,9 @@ MarkdownPreview::MarkdownPreview(QWidget *parent)
     // Never hand raw document links straight to the OS: only http/https
     // links and mail addresses may leave the app.
     setOpenExternalLinks(false);
+    // Internal navigation is handled manually (see openAllowedLink): the
+    // default would blank the preview when a target fails to load.
+    setOpenLinks(false);
     connect(this, &QTextBrowser::anchorClicked,
             this, &MarkdownPreview::openAllowedLink);
     setFrameShape(QTextBrowser::NoFrame);
@@ -63,9 +66,11 @@ void MarkdownPreview::renderNow()
 
 void MarkdownPreview::setScrollRatio(double ratio)
 {
-    QScrollBar *bar = verticalScrollBar();
-    const QSignalBlocker blocker(bar); // keep editor sync from echoing back
-    bar->setValue(qRound(ratio * double(bar->maximum())));
+    // No signal blocking here: the scrollbar's valueChanged is what moves
+    // the viewport, so blocking it would freeze the visible content while
+    // the scrollbar itself travels. Echo loops are cut with the owner's
+    // reentry guard instead (see MainWindow::onEditorScrolled).
+    verticalScrollBar()->setValue(qRound(ratio * double(verticalScrollBar()->maximum())));
 }
 
 void MarkdownPreview::resetScroll()
@@ -90,6 +95,13 @@ QVariant MarkdownPreview::loadResource(int type, const QUrl &name)
 
 void MarkdownPreview::openAllowedLink(const QUrl &url)
 {
+    // Same-document anchors are scrolled to manually (internal navigation
+    // is disabled; see the constructor).
+    if (url.hasFragment() && url.scheme().isEmpty() && url.path().isEmpty()
+        && url.host().isEmpty() && url.query().isEmpty()) {
+        scrollToAnchor(url.fragment());
+        return;
+    }
     const QString scheme = url.scheme().toLower();
     if (scheme == QLatin1String("http") || scheme == QLatin1String("https")
         || scheme == QLatin1String("mailto")) {

@@ -25,6 +25,10 @@ public:
 
     void setEditorFont(const QFont &font);
 
+    // Gutter colors from the active syntax scheme (replaces the
+    // palette-derived defaults).
+    void setGutterColors(const QColor &line, const QColor &active);
+
     // Formatting commands (menu/toolbar/shortcut entry points).
     void toggleBold();
     void toggleItalic();
@@ -51,8 +55,10 @@ public slots:
     void insertMarkdownImage(const QString &markdownText);
 
 protected:
+    void changeEvent(QEvent *event) override;
     void keyPressEvent(QKeyEvent *event) override;
     void insertFromMimeData(const QMimeData *source) override;
+    bool canInsertFromMimeData(const QMimeData *source) const override;
     void resizeEvent(QResizeEvent *event) override;
 
 private:

@@ -12,6 +12,7 @@ FindReplaceBar::FindReplaceBar(QWidget *parent)
     : QWidget(parent)
 {
     setObjectName(QStringLiteral("findReplaceBar"));
+    hide(); // the bar is opt-in (Ctrl+F / Ctrl+H); never visible at startup
 
     auto *layout = new QHBoxLayout(this);
     layout->setContentsMargins(8, 4, 8, 4);

@@ -148,7 +148,15 @@ void MarkdownHighlighter::setSpellChecker(SpellChecker *checker)
 {
     if (m_spell == checker)
         return;
+    // Toggling dictionaries or enabled state must repaint immediately;
+    // without this the underlines only appear after each block is edited.
+    if (m_spell)
+        disconnect(m_spell, &SpellChecker::stateChanged, this,
+                   &QSyntaxHighlighter::rehighlight);
     m_spell = checker;
+    if (m_spell)
+        connect(m_spell, &SpellChecker::stateChanged, this,
+                &QSyntaxHighlighter::rehighlight);
     rehighlight();
 }
 
@@ -319,7 +327,10 @@ void MarkdownHighlighter::spellCheck(const QString &text)
 
 int MarkdownHighlighter::headingLevel(const QString &text, QString *title)
 {
-    static const QRegularExpression re(QStringLiteral("^\\s{0,3}(#{1,6})(\\s+)(.+?)\\s*#*\\s*$"));
+    // A closing hash run needs preceding whitespace (CommonMark), so
+    // "## Learning C#" keeps its "#".
+    static const QRegularExpression re(
+        QStringLiteral("^\\s{0,3}(#{1,6})(\\s+)(.+?)(?:\\s+#+)?\\s*$"));
     const auto m = re.match(text);
     if (!m.hasMatch())
         return 0;
@@ -361,9 +372,9 @@ MarkdownHighlighter::FenceInfo MarkdownHighlighter::decodeFenceState(int state)
     return info;
 }
 
-QVector<QPair<int, QString>> MarkdownHighlighter::headings() const
+QVector<MarkdownHighlighter::Heading> MarkdownHighlighter::headings() const
 {
-    QVector<QPair<int, QString>> result;
+    QVector<Heading> result;
     QTextBlock block = document()->firstBlock();
     while (block.isValid()) {
         // Fenced code content (e.g. "# comment" in Python) is not a heading.
@@ -377,7 +388,7 @@ QVector<QPair<int, QString>> MarkdownHighlighter::headings() const
         QString title;
         const int level = headingLevel(block.text(), &title);
         if (level > 0)
-            result.append({ level, title });
+            result.append({ level, title, block.position() });
         block = block.next();
     }
     return result;

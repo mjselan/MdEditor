@@ -5,6 +5,7 @@
 
 #include <QColor>
 #include <QHash>
+#include <QString>
 #include <QSyntaxHighlighter>
 #include <QTextCharFormat>
 #include <QVector>
@@ -36,6 +37,15 @@ public:
         int length = 0; // 0 == not a fence
     };
 
+    // One outline entry: heading level, visible title, and the document
+    // position of its block (for click-to-jump navigation).
+    struct Heading
+    {
+        int level = 0;
+        QString title;
+        int position = -1;
+    };
+
     static int encodeFenceState(const FenceInfo &info);
     static FenceInfo decodeFenceState(int state);
 
@@ -50,8 +60,9 @@ public:
     // segments are never spell checked.
     void setSpellChecker(SpellChecker *checker);
 
-    // Headings in document order as [level, text] pairs; used by the outline.
-    QVector<QPair<int, QString>> headings() const;
+    // Headings in document order; used by the outline panel. Fenced code
+    // content is skipped (see the implementation).
+    QVector<Heading> headings() const;
 
     // Static parsing helpers shared with the outline panel and tests.
     static int headingLevel(const QString &text, QString *title = nullptr);

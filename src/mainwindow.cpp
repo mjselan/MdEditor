@@ -22,6 +22,7 @@
 #include <QJsonObject>
 #include <QImage>
 #include <QLabel>
+#include <QMenu>
 #include <QMenuBar>
 #include <QMessageBox>
 #include <QMimeData>
@@ -32,14 +33,11 @@
 #include <QScrollBar>
 #include <QScopeGuard>
 #include <QSettings>
-#include <QSignalBlocker>
 #include <QSplitter>
 #include <QStandardPaths>
 #include <QToolBar>
 #include <QStatusBar>
-#include <QTextBlock>
 #include <QTextDocument>
-#include <QTextStream>
 #include <QUrl>
 #include <QVBoxLayout>
 
@@ -94,6 +92,9 @@ MainWindow::MainWindow(QWidget *parent)
 
 void MainWindow::createWidgets()
 {
+    // Icon pixmaps must not outlive the application (static cache).
+    connect(qApp, &QCoreApplication::aboutToQuit, [] { appicons::clearCache(); });
+
     m_editor = new MarkdownEditor(this);
     m_preview = new MarkdownPreview(this);
     m_preview->setSourceDocument(m_editor->document()); // live lazy rendering
@@ -223,6 +224,11 @@ void MainWindow::createActions()
     m_actionRedo = new QAction(tr("&Redo"), this);
     m_actionRedo->setShortcut(QKeySequence::Redo);
     connect(m_actionRedo, &QAction::triggered, m_editor, &QPlainTextEdit::redo);
+    // Disabled until the first edit; kept in sync with the undo stack.
+    m_actionUndo->setEnabled(false);
+    m_actionRedo->setEnabled(false);
+    connect(m_editor, &QPlainTextEdit::undoAvailable, m_actionUndo, &QAction::setEnabled);
+    connect(m_editor, &QPlainTextEdit::redoAvailable, m_actionRedo, &QAction::setEnabled);
 
     m_actionAbout = new QAction(tr("&About Markdown Editor"), this);
     connect(m_actionAbout, &QAction::triggered, this, &MainWindow::showAbout);
@@ -439,6 +445,10 @@ void MainWindow::connectSignals()
     connect(m_findBar, &FindReplaceBar::searchTextChanged, this, &MainWindow::countMatches);
     connect(m_findBar, &FindReplaceBar::escapePressed, this,
             [this] { m_editor->setFocus(); });
+
+    m_editor->setContextMenuPolicy(Qt::CustomContextMenu);
+    connect(m_editor, &QWidget::customContextMenuRequested, this,
+            &MainWindow::onEditorContextMenu);
     connect(m_findBar, &FindReplaceBar::replaceCurrent, this, &MainWindow::replaceCurrent);
     connect(m_findBar, &FindReplaceBar::replaceAll, this, &MainWindow::replaceAll);
 
@@ -463,6 +473,7 @@ void MainWindow::newFile()
         return;
     m_editor->clear();
     setCurrentFile(QString());
+    m_lineEnding = QStringLiteral("\n");
     m_preview->resetScroll();
     updateCounts();
     rebuildOutline();
@@ -481,15 +492,25 @@ void MainWindow::openFile()
 bool MainWindow::loadFile(const QString &path)
 {
     QFile file(path);
-    if (!file.open(QIODevice::ReadOnly | QIODevice::Text)) {
+    if (!file.open(QIODevice::ReadOnly)) {
         QMessageBox::warning(this, tr("Open Error"),
                              tr("Cannot open %1:\n%2").arg(path, file.errorString()));
         return false;
     }
-    QTextStream stream(&file);
-    stream.setEncoding(QStringConverter::Utf8);
-    const QString content = stream.readAll();
+    // Read raw bytes: QIODevice::Text translation would hide the file's
+    // real line endings, and silent U+FFFD substitution would corrupt the
+    // file on the next save.
+    const QByteArray raw = file.readAll();
     file.close();
+
+    m_lineEnding = detectLineEnding(raw);
+    QString content = QString::fromUtf8(raw);
+    if (content.toUtf8() != raw) {
+        QMessageBox::warning(this, tr("Open Warning"),
+                             tr("%1 is not valid UTF-8; undecodable bytes "
+                                "were replaced and saving will keep them replaced.")
+                                 .arg(path));
+    }
 
     m_editor->setPlainText(content);
     setCurrentFile(path);
@@ -522,12 +543,14 @@ bool MainWindow::saveFileAs()
 bool MainWindow::saveToFile(const QString &path)
 {
     QSaveFile file(path);
-    if (!file.open(QIODevice::WriteOnly | QIODevice::Text)) {
+    // No QIODevice::Text: Qt would translate newlines to the OS default;
+    // encodeWithLineEnding() writes back exactly what was loaded.
+    if (!file.open(QIODevice::WriteOnly)) {
         QMessageBox::warning(this, tr("Save Error"),
                              tr("Cannot save %1:\n%2").arg(path, file.errorString()));
         return false;
     }
-    const QByteArray utf8 = m_editor->toPlainText().toUtf8();
+    const QByteArray utf8 = encodeWithLineEnding(m_editor->toPlainText(), m_lineEnding);
     if (file.write(utf8) != utf8.size() || !file.commit()) {
         QMessageBox::warning(this, tr("Save Error"),
                              tr("Cannot save %1:\n%2").arg(path, file.errorString()));
@@ -539,6 +562,22 @@ bool MainWindow::saveToFile(const QString &path)
     m_preview->setDocumentDirectory(QFileInfo(path).absolutePath());
     clearRecoveryFile();
     return true;
+}
+
+QString MainWindow::detectLineEnding(const QByteArray &raw)
+{
+    // Any CRLF wins: a file saved on Windows must round-trip as CRLF.
+    if (raw.contains("\r\n"))
+        return QStringLiteral("\r\n");
+    return QStringLiteral("\n");
+}
+
+QByteArray MainWindow::encodeWithLineEnding(const QString &text, const QString &ending)
+{
+    QByteArray utf8 = text.toUtf8(); // toPlainText() only emits \n
+    if (ending != QLatin1String("\n"))
+        utf8.replace(QByteArray("\n"), ending.toUtf8());
+    return utf8;
 }
 
 void MainWindow::setCurrentFile(const QString &path)
@@ -576,17 +615,21 @@ void MainWindow::exportHtml()
     if (path.isEmpty())
         return;
 
-    QFile file(path);
+    // Export the rendered document (the preview holds the markdown-rendered
+    // copy); the editor document contains raw markdown source.
+    m_preview->renderNow(); // ensure the rendered copy is current
+    QSaveFile file(path);
     if (!file.open(QIODevice::WriteOnly | QIODevice::Text)) {
         QMessageBox::warning(this, tr("Export Error"),
                              tr("Cannot write %1:\n%2").arg(path, file.errorString()));
         return;
     }
-    // Export the rendered document (the preview holds the markdown-rendered
-    // copy); the editor document contains raw markdown source.
-    m_preview->renderNow(); // ensure the rendered copy is current
-    file.write(m_preview->document()->toHtml().toUtf8());
-    file.close();
+    const QByteArray html = m_preview->document()->toHtml().toUtf8();
+    if (file.write(html) != html.size() || !file.commit()) {
+        QMessageBox::warning(this, tr("Export Error"),
+                             tr("Cannot write %1:\n%2").arg(path, file.errorString()));
+        return;
+    }
     statusBar()->showMessage(tr("Exported to %1").arg(path), 4000);
 }
 
@@ -654,15 +697,25 @@ void MainWindow::onCursorPositionChanged()
 
 void MainWindow::onEditorScrolled(int value)
 {
+    // Reentry guard (instead of QSignalBlocker): the opposite scrollbar's
+    // valueChanged is what moves its viewport, so blocking signals would
+    // freeze the visible content while the scrollbar travels.
+    if (m_syncingScroll)
+        return;
+    const QScopeGuard guard([this] { m_syncingScroll = false; });
+    m_syncingScroll = true;
     const int max = m_editor->verticalScrollBar()->maximum();
     const double ratio = max > 0 ? double(value) / double(max) : 0.0;
-    m_preview->setScrollRatio(ratio); // internally signal-blocked
+    m_preview->setScrollRatio(ratio);
 }
 
 void MainWindow::onPreviewScrolled(double ratio)
 {
+    if (m_syncingScroll)
+        return;
+    const QScopeGuard guard([this] { m_syncingScroll = false; });
+    m_syncingScroll = true;
     QScrollBar *bar = m_editor->verticalScrollBar();
-    const QSignalBlocker blocker(bar); // do not echo back into the preview
     bar->setValue(qRound(ratio * double(bar->maximum())));
 }
 
@@ -746,26 +799,79 @@ void MainWindow::replaceAll(const QString &findText, const QString &replaceText,
 {
     if (findText.isEmpty())
         return;
-    QTextCursor cursor = m_editor->textCursor();
-    cursor.movePosition(QTextCursor::Start);
+    QTextDocument *doc = m_editor->document();
+    QTextCursor start(doc);
+    start.movePosition(QTextCursor::Start);
 
     QTextDocument::FindFlags flags;
     if (matchCase)
         flags |= QTextDocument::FindCaseSensitively;
 
-    cursor.beginEditBlock();
+    // The edit block lives on its own cursor: reassigning the probe cursor
+    // below must never disturb it, or the block stays open and later edits
+    // merge into one undo step (and textChanged stalls).
+    QTextCursor edit(doc);
+    edit.beginEditBlock();
     int count = 0;
-    while (true) {
-        cursor = m_editor->document()->find(findText, cursor, flags);
-        if (cursor.isNull())
-            break;
-        cursor.insertText(replaceText);
+    QTextCursor hit = doc->find(findText, start, flags);
+    while (!hit.isNull()) {
+        hit.insertText(replaceText);
         ++count;
+        hit = doc->find(findText, hit, flags);
     }
-    cursor.endEditBlock();
+    edit.endEditBlock();
 
     m_findBar->setMatchCount(qMax(0, count));
     statusBar()->showMessage(tr("Replaced %1 occurrence(s)").arg(count), 4000);
+}
+
+void MainWindow::onEditorContextMenu(const QPoint &pos)
+{
+    QMenu *menu = m_editor->createStandardContextMenu(pos);
+    menu->setAttribute(Qt::WA_DeleteOnClose);
+
+    // Prepend spelling actions when the word under the cursor is flagged.
+    // Position lookups use viewport coordinates, matching both the signal
+    // and createStandardContextMenu().
+    if (m_spellChecker->available() && m_spellChecker->enabled()) {
+        QTextCursor word = m_editor->cursorForPosition(pos);
+        word.select(QTextCursor::WordUnderCursor);
+        const QString text = word.selectedText();
+        if (!text.isEmpty() && !m_spellChecker->isWordCorrect(text)) {
+            const int wordStart = word.selectionStart();
+            const int wordEnd = word.selectionEnd();
+            const auto replaceWord = [this, wordStart, wordEnd](const QString &replacement) {
+                QTextCursor edit = m_editor->textCursor();
+                edit.setPosition(wordStart);
+                edit.setPosition(wordEnd, QTextCursor::KeepAnchor);
+                edit.insertText(replacement);
+            };
+            QList<QAction *> spellActions;
+            const QStringList suggestions = m_spellChecker->suggestionsFor(text);
+            for (int i = 0; i < qMin(8, suggestions.size()); ++i) {
+                QAction *suggestion = new QAction(suggestions.at(i), menu);
+                connect(suggestion, &QAction::triggered, this,
+                        [replaceWord, suggestion] { replaceWord(suggestion->text()); });
+                spellActions.append(suggestion);
+            }
+            QAction *ignore = new QAction(tr("Ignore"), menu);
+            connect(ignore, &QAction::triggered, this,
+                    [this, text] { m_spellChecker->ignoreWord(text); });
+            spellActions.append(ignore);
+            QAction *add = new QAction(tr("Add to Dictionary"), menu);
+            connect(add, &QAction::triggered, this,
+                    [this, text] { m_spellChecker->addToPersonal(text); });
+            spellActions.append(add);
+            // stateChanged() from ignore/add rehighlights automatically;
+            // the suggestion replacement rehighlights via textChanged.
+            QAction *first = menu->actions().value(0);
+            menu->insertSeparator(first);
+            for (QAction *action : std::as_const(spellActions))
+                menu->insertAction(first, action);
+        }
+    }
+
+    menu->exec(m_editor->viewport()->mapToGlobal(pos));
 }
 
 void MainWindow::onFindTriggered()
@@ -788,7 +894,11 @@ void MainWindow::setThemeMode(int mode)
 {
     m_themeMode = static_cast<theme::Mode>(mode);
     qApp->setPalette(theme::paletteFor(m_themeMode));
-    m_highlighter->setColors(theme::syntaxColors(m_themeMode));
+    const auto colors = theme::syntaxColors(m_themeMode);
+    m_highlighter->setColors(colors);
+    // The scheme owns the gutter colors (they are not palette blends).
+    m_editor->setGutterColors(colors.value(QStringLiteral("lineNumber")),
+                              colors.value(QStringLiteral("lineNumberActive")));
     m_outline->setColors(palette().color(QPalette::Window), palette().color(QPalette::Text));
     refreshToolbarIcons();
 }
@@ -815,8 +925,6 @@ void MainWindow::onChooseFont()
     if (!ok)
         return;
     m_editor->setEditorFont(chosen);
-    m_fontFamily = chosen.family();
-    m_fontSize = chosen.pointSize();
 }
 
 // ---------------------------------------------------------------------------
@@ -825,25 +933,9 @@ void MainWindow::onChooseFont()
 
 void MainWindow::rebuildOutline()
 {
-    QVector<QPair<int, QString>> headings;
-    QVector<int> positions;
-    const QTextBlock block = m_editor->document()->firstBlock();
-    for (QTextBlock b = block; b.isValid(); b = b.next()) {
-        // Fenced code content (e.g. "# comment" in Python) is not a heading.
-        // userState() is -1 for never-highlighted blocks; those keep the
-        // old behavior rather than being skipped blindly.
-        const int state = b.userState();
-        if (state > MarkdownHighlighter::StateNone
-            && (state & MarkdownHighlighter::StateFencedCode))
-            continue;
-        QString title;
-        const int level = MarkdownHighlighter::headingLevel(b.text(), &title);
-        if (level > 0) {
-            headings.append({ level, title });
-            positions.append(b.position());
-        }
-    }
-    m_outline->setHeadings(headings, positions);
+    // Single source: the highlighter owns heading parsing (including the
+    // fenced-code exclusion) and reports block positions for navigation.
+    m_outline->setHeadings(m_highlighter->headings());
     m_outline->setActiveHeading(m_editor->textCursor().position());
 }
 
@@ -960,10 +1052,10 @@ void MainWindow::readSettings()
     default: m_actionThemeAuto->setChecked(true); break;
     }
 
-    m_fontFamily = settings.value(QStringLiteral("editorFontFamily")).toString();
-    m_fontSize = settings.value(QStringLiteral("editorFontSize"), 11).toInt();
-    if (!m_fontFamily.isEmpty() && m_fontSize > 0) {
-        QFont font(m_fontFamily, m_fontSize);
+    const QString fontFamily = settings.value(QStringLiteral("editorFontFamily")).toString();
+    const int fontSize = settings.value(QStringLiteral("editorFontSize"), 11).toInt();
+    if (!fontFamily.isEmpty() && fontSize > 0) {
+        QFont font(fontFamily, fontSize);
         font.setFixedPitch(true);
         m_editor->setEditorFont(font);
     }
@@ -976,8 +1068,13 @@ void MainWindow::writeSettings()
     QSettings settings(settingsOrg(), settingsApp());
     settings.setValue(QStringLiteral("windowGeometry"), saveGeometry());
     settings.setValue(QStringLiteral("themeMode"), int(m_themeMode));
-    settings.setValue(QStringLiteral("editorFontFamily"), m_fontFamily);
-    settings.setValue(QStringLiteral("editorFontSize"), m_fontSize);
+    // Persist the live editor font: Ctrl++/Ctrl+- never touch any member,
+    // so only the font dialog used to survive a restart. pointSize() is -1
+    // for pixel-sized fonts; then the size entry is left at its old value.
+    const QFont current = m_editor->font();
+    settings.setValue(QStringLiteral("editorFontFamily"), current.family());
+    if (current.pointSize() > 0)
+        settings.setValue(QStringLiteral("editorFontSize"), current.pointSize());
     settings.setValue(QStringLiteral("outlineVisible"), m_actionOutline->isChecked());
 }
 
@@ -987,15 +1084,29 @@ void MainWindow::writeSettings()
 
 QString MainWindow::recoveryFilePath() const
 {
+    // Per-process snapshot: a second instance never prompts for (or deletes)
+    // the first instance's autosave.
     const QString base = QStandardPaths::writableLocation(QStandardPaths::AppLocalDataLocation);
     QDir().mkpath(base);
-    return base + QStringLiteral("/recovery.json");
+    return base + QStringLiteral("/recovery-%1.json").arg(QCoreApplication::applicationPid());
+}
+
+QStringList MainWindow::recoveryCandidates() const
+{
+    const QString base = QStandardPaths::writableLocation(QStandardPaths::AppLocalDataLocation);
+    const QStringList names =
+        QDir(base).entryList({ QStringLiteral("recovery-*.json") }, QDir::Files, QDir::Time);
+    QStringList paths;
+    paths.reserve(names.size());
+    for (const QString &name : names)
+        paths << base + QLatin1Char('/') + name;
+    return paths; // newest first
 }
 
 void MainWindow::attemptRecoveryLoad()
 {
-    QFile file(recoveryFilePath());
-    if (!file.exists())
+    const QStringList candidates = recoveryCandidates();
+    if (candidates.isEmpty())
         return;
 
     const QMessageBox::StandardButton answer = QMessageBox::question(
@@ -1003,30 +1114,43 @@ void MainWindow::attemptRecoveryLoad()
         tr("An autosave from a previous session was found.\nRestore it?"),
         QMessageBox::Yes | QMessageBox::No);
     if (answer != QMessageBox::Yes) {
-        file.remove();
+        QFile::remove(candidates.first());
         return;
     }
+    loadRecoveryFile(candidates.first());
+}
 
+bool MainWindow::loadRecoveryFile(const QString &path)
+{
+    QFile file(path);
     if (!file.open(QIODevice::ReadOnly))
-        return;
+        return false;
     const QJsonDocument doc = QJsonDocument::fromJson(file.readAll());
     file.close();
 
     const QJsonObject root = doc.object();
     m_editor->setPlainText(root.value(QStringLiteral("content")).toString());
-    const QString path = root.value(QStringLiteral("path")).toString();
-    setCurrentFile(path);
-    if (!path.isEmpty())
-        m_preview->setDocumentDirectory(QFileInfo(path).absolutePath());
+    const QString docPath = root.value(QStringLiteral("path")).toString();
+    setCurrentFile(docPath);
+    if (!docPath.isEmpty())
+        m_preview->setDocumentDirectory(QFileInfo(docPath).absolutePath());
+    // Restored work is unsaved by definition: without this, closing (or
+    // opening another file) would discard it without asking, and the
+    // recovery file would then be deleted.
+    m_editor->document()->setModified(true);
     setWindowModified(true);
     updateCounts();
     rebuildOutline();
+    return true;
 }
 
 void MainWindow::writeRecoveryFile()
 {
-    if (m_currentFile.isEmpty() && m_editor->toPlainText().isEmpty())
-        return; // nothing worth recovering
+    // Only unsaved work is worth snapshotting: this skips constant disk
+    // churn on large documents and avoids "restore?" prompts for content
+    // identical to the saved file.
+    if (!m_editor->document()->isModified())
+        return;
 
     QJsonObject root;
     root.insert(QStringLiteral("path"), m_currentFile);

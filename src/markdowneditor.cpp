@@ -4,6 +4,7 @@
 #include <QFontDatabase>
 #include <QImage>
 #include <QGuiApplication>
+#include <QEvent>
 #include <QKeyEvent>
 #include <QMimeData>
 #include <QPaintEvent>
@@ -29,7 +30,9 @@ QString editorFontFamily()
     for (const QString &candidate : preferred)
         if (families.contains(candidate))
             return candidate;
-    return QStringLiteral("monospace");
+    // System monospace instead of a bare "monospace" string, which may not
+    // resolve on minimal installs.
+    return QFontDatabase::systemFont(QFontDatabase::FixedFont).family();
 }
 
 QColor blend(const QColor &a, const QColor &b, qreal ratio)
@@ -107,6 +110,29 @@ void MarkdownEditor::setEditorFont(const QFont &font)
     setFont(font);
     setTabStopDistance(4 * QFontMetricsF(font).horizontalAdvance(QLatin1Char(' ')));
     updateLineNumberAreaWidth(0);
+}
+
+void MarkdownEditor::setGutterColors(const QColor &line, const QColor &active)
+{
+    if (line.isValid())
+        m_lineNumberColor = line;
+    if (active.isValid())
+        m_lineNumberActiveColor = active;
+    updateLineNumberAreaWidth(0);
+    viewport()->update();
+}
+
+void MarkdownEditor::changeEvent(QEvent *event)
+{
+    QPlainTextEdit::changeEvent(event);
+    // The current-line tint is a palette blend, so recompute it when the
+    // palette changes. Gutter colors follow the syntax scheme (see
+    // setGutterColors) and are deliberately left alone here.
+    if (event->type() == QEvent::PaletteChange) {
+        m_currentLineColor = blend(palette().color(QPalette::Base),
+                                   palette().color(QPalette::Highlight), 0.12);
+        highlightCurrentLine();
+    }
 }
 
 int MarkdownEditor::lineNumberAreaWidth() const
@@ -193,34 +219,50 @@ void MarkdownEditor::wrapSelection(const QString &marker)
         const int end = qMax(cursor.anchor(), cursor.position());
         const QString selected = cursor.selectedText();
 
-        // Toggle off when the markers surround the selection: replace the
-        // whole [start, end) range with the unmarked inner text.
+        // Toggle off when the selection is exactly marker + clean inner
+        // text + marker. The inner text must not start/end with the marker
+        // itself: "**bold**" with "*" unwraps nothing (it is a longer run,
+        // handled below), while "**bold**" with "**" unwraps to "bold".
         if (selected.size() >= 2 * marker.size() && selected.startsWith(marker)
             && selected.endsWith(marker)) {
             const QString inner =
                 selected.mid(marker.size(), selected.size() - 2 * marker.size());
-            cursor.setPosition(start);
-            cursor.setPosition(end, QTextCursor::KeepAnchor);
-            cursor.insertText(inner);
-            // Leave the unwrapped text selected, mirroring the wrap path.
-            cursor.setPosition(start);
-            cursor.setPosition(start + inner.size(), QTextCursor::KeepAnchor);
-            cursor.endEditBlock();
-            setTextCursor(cursor);
-            return;
+            if (!inner.startsWith(marker) && !inner.endsWith(marker)) {
+                cursor.setPosition(start);
+                cursor.setPosition(end, QTextCursor::KeepAnchor);
+                cursor.insertText(inner);
+                // Leave the unwrapped text selected, mirroring the wrap path.
+                cursor.setPosition(start);
+                cursor.setPosition(start + inner.size(), QTextCursor::KeepAnchor);
+                cursor.endEditBlock();
+                setTextCursor(cursor);
+                return;
+            }
         }
 
-        // Toggle off when the markers sit immediately outside the selection.
+        // Toggle off when the markers around the selection form an exact
+        // run. Counting the run (instead of matching one character) keeps
+        // Ctrl+I on "**bold**" from stripping it down to "*bold*": a run
+        // of 2 with marker "*" wraps to "***bold***" instead.
         QTextDocument *doc = document();
-        const auto adjacent = [&](int pos, bool before) {
-            for (int i = 0; i < marker.size(); ++i) {
-                const QChar c = doc->characterAt(before ? pos - marker.size() + i : pos + i);
-                if (c.isNull() || c != marker.at(i))
-                    return false;
+        const auto runLength = [&](int pos, bool before) {
+            int n = 0;
+            const QChar want = marker.at(0);
+            if (before) {
+                for (int p = pos - 1; p >= 0 && doc->characterAt(p) == want; --p)
+                    ++n;
+            } else {
+                for (int p = pos;; ++p) {
+                    const QChar c = doc->characterAt(p);
+                    if (c.isNull() || c != want)
+                        break;
+                    ++n;
+                }
             }
-            return true;
+            return n;
         };
-        if (adjacent(start, true) && adjacent(end, false)) {
+        if (runLength(start, true) == marker.size()
+            && runLength(end, false) == marker.size()) {
             cursor.setPosition(end);
             cursor.setPosition(end + marker.size(), QTextCursor::KeepAnchor);
             cursor.insertText(QString());
@@ -286,18 +328,20 @@ void MarkdownEditor::forEachSelectedLine(
     // spans whole lines, so a shorter range would duplicate the unselected tail
     // of the final line. The per-line transform keeps one separator per line,
     // so the separator itself is never consumed and trailing blocks survive.
+    const int firstPos = first.position();
     const int lastContentEnd = last.position() + last.length() - 1; // exclusive
 
     cursor.beginEditBlock();
-    cursor.setPosition(first.position());
+    cursor.setPosition(firstPos);
     cursor.setPosition(lastContentEnd, QTextCursor::KeepAnchor);
     cursor.insertText(replaced);
     cursor.endEditBlock();
 
-    // Leave the cursor at the end of the first affected line.
-    const int firstLineLength = replaced.section(QLatin1Char('\n'), 0, 0).size();
-    cursor.setPosition(qMin(first.position() + firstLineLength,
-                            document()->characterCount() - 1));
+    // Reselect the transformed range so repeated invocations (e.g. Tab)
+    // keep operating on the same lines instead of collapsing to one. The
+    // block handle is stale after the split above; use the saved offset.
+    cursor.setPosition(firstPos);
+    cursor.setPosition(firstPos + replaced.size(), QTextCursor::KeepAnchor);
     setTextCursor(cursor);
 }
 
@@ -324,12 +368,80 @@ void MarkdownEditor::toggleFencedCodeBlock()
         last = document()->lastBlock();
 
     static const QRegularExpression fence(QStringLiteral("^\\s*(```|~~~)\\s*$"));
+    static const QRegularExpression openFence(QStringLiteral("^\\s{0,3}(`{3,}|~{3,})"));
+    bool unwrapPair = false;
+    if (first == last && !cursor.hasSelection()) {
+        // Bare cursor: toggle the enclosing fenced block, if any, instead
+        // of nesting a new fence inside it. Replay open/close from the
+        // document start (CommonMark: same marker, close length >= open).
+        QTextBlock open;
+        QChar openMarker;
+        int openLength = 0;
+        bool inside = false;
+        for (QTextBlock b = document()->firstBlock(); b.isValid() && b != first;
+             b = b.next()) {
+            if (!inside) {
+                const auto om = openFence.match(b.text());
+                if (om.hasMatch()) {
+                    inside = true;
+                    open = b;
+                    openMarker = om.captured(1).at(0);
+                    openLength = om.captured(1).size();
+                }
+            } else {
+                const auto cm = fence.match(b.text());
+                if (cm.hasMatch() && cm.captured(1).at(0) == openMarker
+                    && cm.captured(1).size() >= openLength)
+                    inside = false;
+            }
+        }
+        const auto firstOpen = openFence.match(first.text());
+        if (inside) {
+            if (fence.match(first.text()).hasMatch()) {
+                // Cursor on the closing fence: unwrap [open, first].
+                last = first;
+                first = open;
+                unwrapPair = true;
+            } else {
+                // Inside the block: unwrap through its close, if any.
+                for (QTextBlock b = first.next(); b.isValid(); b = b.next()) {
+                    const auto cm = fence.match(b.text());
+                    if (cm.hasMatch() && cm.captured(1).at(0) == openMarker
+                        && cm.captured(1).size() >= openLength) {
+                        last = b;
+                        first = open;
+                        unwrapPair = true;
+                        break;
+                    }
+                }
+                // Unclosed fence: fall through to single-line behavior.
+            }
+        } else if (firstOpen.hasMatch()) {
+            // Cursor on an opening fence: unwrap through its close, if any.
+            // A lone fence line is left alone (see below).
+            for (QTextBlock b = first.next(); b.isValid(); b = b.next()) {
+                const auto cm = fence.match(b.text());
+                if (cm.hasMatch() && cm.captured(1).at(0) == firstOpen.captured(1).at(0)
+                    && cm.captured(1).size() >= firstOpen.captured(1).size()) {
+                    last = b;
+                    unwrapPair = true;
+                    break;
+                }
+            }
+        }
+        // Otherwise not in or on a fence: fall through below.
+    }
     // A lone fence line (first == last) unwraps to nothing: removing "both"
     // fence ranges from one block would eat the neighboring line, and
     // wrapping it in another fence is never what was asked.
-    if (fence.match(first.text()).hasMatch() && fence.match(last.text()).hasMatch()) {
-        if (first == last)
-            return;
+    if (!unwrapPair) {
+        if (fence.match(first.text()).hasMatch() && fence.match(last.text()).hasMatch()) {
+            if (first == last)
+                return;
+            unwrapPair = true;
+        }
+    }
+    if (unwrapPair) {
         // Unwrap: remove both fence lines. QTextBlock::length() covers the
         // block separator, which past the last block is not a valid cursor
         // position, so clamp the range.
@@ -434,7 +546,7 @@ void MarkdownEditor::toggleNumberedList()
 
 void MarkdownEditor::keyPressEvent(QKeyEvent *event)
 {
-    if (event->key() == Qt::Key_Return && !event->modifiers()
+    if ((event->key() == Qt::Key_Return || event->key() == Qt::Key_Enter) && !event->modifiers()
         && !textCursor().hasSelection()) {
         static const QRegularExpression listItem(
             QStringLiteral("^(\\s*)([-*+]|(\\d{1,9})([.)]))(\\s+)(.*)$"));
@@ -446,12 +558,27 @@ void MarkdownEditor::keyPressEvent(QKeyEvent *event)
             const QString marker = m.captured(2);
             const QString content = m.captured(6);
 
-            QPlainTextEdit::keyPressEvent(event); // insert the newline
+            QTextCursor cursor = textCursor();
+            // At the very start of the line there is nothing to continue:
+            // a plain split avoids producing "- - foo".
+            if (cursor.position() == cursor.block().position()) {
+                QPlainTextEdit::keyPressEvent(event);
+                event->accept();
+                return;
+            }
+            // Everything below runs in one edit block so a single undo
+            // reverts the whole continuation (no base-class insertion).
+            cursor.beginEditBlock();
             if (content.isEmpty()) {
-                // Empty item: drop the marker instead of nesting forever.
-                QTextCursor cursor = textCursor();
-                cursor.movePosition(QTextCursor::StartOfBlock, QTextCursor::KeepAnchor);
+                // Empty item: exit the list by dropping this line's marker,
+                // then end the line.
+                const int blockStart = cursor.block().position();
+                const int blockEnd = blockStart + cursor.block().length() - 1;
+                cursor.setPosition(blockStart);
+                cursor.setPosition(blockEnd, QTextCursor::KeepAnchor);
                 cursor.insertText(indent);
+                cursor.movePosition(QTextCursor::EndOfBlock);
+                cursor.insertBlock();
             } else {
                 // Bullets repeat verbatim; numbers increment, keeping the
                 // original delimiter (groups 3/4 only match on numbers, so
@@ -464,8 +591,11 @@ void MarkdownEditor::keyPressEvent(QKeyEvent *event)
                     if (ok)
                         next = QString::number(number + 1) + m.captured(4);
                 }
-                insertPlainText(indent + next + QStringLiteral(" "));
+                cursor.insertBlock();
+                cursor.insertText(indent + next + QStringLiteral(" "));
             }
+            cursor.endEditBlock();
+            setTextCursor(cursor);
             event->accept();
             return;
         }
@@ -502,7 +632,12 @@ void MarkdownEditor::keyPressEvent(QKeyEvent *event)
 
 void MarkdownEditor::insertFromMimeData(const QMimeData *source)
 {
-    if (source && source->hasImage()) {
+    // Office suites and browsers often put both text and an image on the
+    // clipboard (e.g. a copied table plus its screenshot). Prefer the text:
+    // the image path only runs when there is no usable text.
+    const bool hasText = source && source->hasText()
+        && !source->text().trimmed().isEmpty();
+    if (source && source->hasImage() && !hasText) {
         const QImage image = qvariant_cast<QImage>(source->imageData());
         if (!image.isNull()) {
             emit imagePasted(image); // insertion completed by insertMarkdownImage()
@@ -510,6 +645,15 @@ void MarkdownEditor::insertFromMimeData(const QMimeData *source)
         }
     }
     QPlainTextEdit::insertFromMimeData(source);
+}
+
+bool MarkdownEditor::canInsertFromMimeData(const QMimeData *source) const
+{
+    // URL drops bubble up to the main window (file open) instead of landing
+    // as text in the editor.
+    if (source && source->hasUrls())
+        return false;
+    return QPlainTextEdit::canInsertFromMimeData(source);
 }
 
 void MarkdownEditor::insertMarkdownImage(const QString &markdownText)

@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 #include <QApplication>
+#include <QCommandLineParser>
 
 #include "appicons.h"
 #include "mainwindow.h"
@@ -16,11 +17,24 @@ int main(int argc, char *argv[])
     // Default to the OS color scheme until the user overrides it in settings.
     app.setPalette(theme::paletteFor(theme::Mode::Auto));
 
+    // arguments() decodes argv as Unicode on Windows (fromLocal8Bit would
+    // mangle non-ASCII paths); --help/--version come for free.
+    QCommandLineParser parser;
+    parser.setApplicationDescription(
+        QStringLiteral("Lightweight offline Markdown editor."));
+    parser.addHelpOption();
+    parser.addVersionOption();
+    parser.addPositionalArgument(QStringLiteral("file"),
+                                 QStringLiteral("Markdown file to open."),
+                                 QStringLiteral("[file]"));
+    parser.process(app);
+
     MainWindow window;
     window.show();
 
-    if (argc > 1)
-        window.openPathFromCommandLine(QString::fromLocal8Bit(argv[1]));
+    const QStringList files = parser.positionalArguments();
+    if (!files.isEmpty())
+        window.openPathFromCommandLine(files.first());
 
     return app.exec();
 }

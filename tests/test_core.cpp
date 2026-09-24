@@ -10,9 +10,18 @@
 #include "spellchecker.h"
 #include "theme.h"
 
+#include <QDir>
+#include <QFile>
+#include <QImage>
+#include <QJsonDocument>
+#include <QJsonObject>
+#include <QMimeData>
+#include <QScrollBar>
 #include <QSignalSpy>
+#include <QStandardPaths>
 #include <QTextBlock>
 #include <QTextDocument>
+#include <QUrl>
 
 namespace {
 
@@ -23,6 +32,15 @@ QVector<QTextBlock> allBlocks(QTextDocument *doc)
         out.append(b);
     return out;
 }
+
+// Exposes protected insertion hooks for behavior tests.
+class TestableEditor : public MarkdownEditor
+{
+public:
+    using MarkdownEditor::MarkdownEditor;
+    bool testCanInsert(const QMimeData *mime) const { return canInsertFromMimeData(mime); }
+    void testInsert(const QMimeData *mime) { insertFromMimeData(mime); }
+};
 
 } // namespace
 
@@ -53,6 +71,22 @@ private slots:
     void searchChangedIsDebounced();
     void escapeHidesBarAndSignals();
     void themeLightIndependentOfAppPalette();
+    void headingLevelKeepsTrailingHash();
+    void enterOnEmptyItemExitsList();
+    void enterAtLineStartSplitsPlainly();
+    void tabTwiceKeepsIndentingSelection();
+    void italicToggleOnBoldAddsMarkers();
+    void fencedToggleUnwrapsEnclosing();
+    void dropUrlsAreRejectedByEditor();
+    void imagePastePrefersText();
+    void replaceAllClosesEditBlock();
+    void spellToggleRehighlights();
+    void lineEndingRoundTrip();
+    void recoverySkipsCleanDocument();
+    void loadRecoveryMarksModified();
+    void previewScrollFollowsRatio();
+    void previewLinkClickKeepsDocument();
+    void findBarHiddenAtStartup();
     void previewRendersDocumentSource();
     void previewThrottleRendersAtMostOncePerInterval();
     void matchCountingDoesNotNeedCaret();
@@ -347,6 +381,19 @@ void TestCore::numberedListContinuationIncrements()
         QTest::keyClick(&editor, Qt::Key_Return);
         QCOMPARE(editor.toPlainText(), QStringLiteral("- item\n- "));
     }
+    {
+        // Numpad Enter behaves like Return, and one undo reverts the
+        // whole continuation (single edit block).
+        MarkdownEditor editor;
+        editor.setPlainText(QStringLiteral("1. item"));
+        QTextCursor cursor = editor.textCursor();
+        cursor.movePosition(QTextCursor::End);
+        editor.setTextCursor(cursor);
+        QTest::keyClick(&editor, Qt::Key_Enter);
+        QCOMPARE(editor.toPlainText(), QStringLiteral("1. item\n2. "));
+        editor.undo();
+        QCOMPARE(editor.toPlainText(), QStringLiteral("1. item"));
+    }
 }
 
 void TestCore::boldToggleUnwrapsSelection()
@@ -409,10 +456,12 @@ void TestCore::headingsSkipFencedCode()
 
     const auto headings = highlighter.headings();
     QCOMPARE(headings.size(), 2);
-    QCOMPARE(headings.at(0).first, 1);
-    QCOMPARE(headings.at(0).second, QStringLiteral("real"));
-    QCOMPARE(headings.at(1).first, 2);
-    QCOMPARE(headings.at(1).second, QStringLiteral("also real"));
+    QCOMPARE(headings.at(0).level, 1);
+    QCOMPARE(headings.at(0).title, QStringLiteral("real"));
+    QVERIFY(headings.at(0).position >= 0);
+    QCOMPARE(headings.at(1).level, 2);
+    QCOMPARE(headings.at(1).title, QStringLiteral("also real"));
+    QVERIFY(headings.at(1).position > headings.at(0).position);
 }
 
 void TestCore::wordCountCases()
@@ -500,6 +549,316 @@ void TestCore::themeLightIndependentOfAppPalette()
     QVERIFY(light.color(QPalette::Text).lightness() < 128);
     QVERIFY(dark.color(QPalette::Window).lightness() < 128);
     QVERIFY(dark.color(QPalette::Text).lightness() > 128);
+}
+
+void TestCore::headingLevelKeepsTrailingHash()
+{
+    // A closing hash run needs preceding whitespace: "## Learning C#"
+    // keeps its "#", while "## Closed ##" still strips the closer.
+    QString title;
+    QCOMPARE(MarkdownHighlighter::headingLevel(QStringLiteral("## Learning C#"), &title), 2);
+    QCOMPARE(title, QStringLiteral("Learning C#"));
+}
+
+void TestCore::enterOnEmptyItemExitsList()
+{
+    // Enter on an empty item drops its marker (exiting the list) instead
+    // of nesting forever, in a single undo step.
+    MarkdownEditor editor;
+    editor.setPlainText(QStringLiteral("1. item\n2. "));
+    QTextCursor cursor = editor.textCursor();
+    cursor.movePosition(QTextCursor::End);
+    editor.setTextCursor(cursor);
+    QTest::keyClick(&editor, Qt::Key_Return);
+    QCOMPARE(editor.toPlainText(), QStringLiteral("1. item\n\n"));
+    editor.undo();
+    QCOMPARE(editor.toPlainText(), QStringLiteral("1. item\n2. "));
+}
+
+void TestCore::enterAtLineStartSplitsPlainly()
+{
+    // No marker continuation when there is nothing to continue.
+    MarkdownEditor editor;
+    editor.setPlainText(QStringLiteral("- foo"));
+    QTextCursor cursor = editor.textCursor();
+    cursor.movePosition(QTextCursor::Start);
+    editor.setTextCursor(cursor);
+    QTest::keyClick(&editor, Qt::Key_Return);
+    QCOMPARE(editor.toPlainText(), QStringLiteral("\n- foo"));
+}
+
+void TestCore::tabTwiceKeepsIndentingSelection()
+{
+    // The transformed range stays selected so repeated Tab keeps working.
+    MarkdownEditor editor;
+    editor.setPlainText(QStringLiteral("alpha\nbeta tail\ngamma"));
+    selectRange(editor, 0, 10);
+    QTest::keyClick(&editor, Qt::Key_Tab);
+    QCOMPARE(editor.toPlainText(), QStringLiteral("    alpha\n    beta tail\ngamma"));
+    QTest::keyClick(&editor, Qt::Key_Tab);
+    QCOMPARE(editor.toPlainText(), QStringLiteral("        alpha\n        beta tail\ngamma"));
+}
+
+void TestCore::italicToggleOnBoldAddsMarkers()
+{
+    // Ctrl+I on "**bold**" must not strip it down to "*bold*": runs are
+    // counted, and only exact runs unwrap.
+    {
+        MarkdownEditor editor;
+        editor.setPlainText(QStringLiteral("**bold**"));
+        selectRange(editor, 2, 6); // inner "bold"
+        editor.toggleItalic();
+        QCOMPARE(editor.toPlainText(), QStringLiteral("***bold***"));
+    }
+    // Exact runs still toggle off.
+    {
+        MarkdownEditor editor;
+        editor.setPlainText(QStringLiteral("**bold**"));
+        selectRange(editor, 0, 8);
+        editor.toggleBold();
+        QCOMPARE(editor.toPlainText(), QStringLiteral("bold"));
+    }
+    {
+        MarkdownEditor editor;
+        editor.setPlainText(QStringLiteral("*italic*"));
+        selectRange(editor, 0, 8);
+        editor.toggleItalic();
+        QCOMPARE(editor.toPlainText(), QStringLiteral("italic"));
+    }
+}
+
+void TestCore::fencedToggleUnwrapsEnclosing()
+{
+    // Bare cursor inside the block unwraps the whole pair.
+    {
+        MarkdownEditor editor;
+        editor.setPlainText(QStringLiteral("```\ncode\n```"));
+        QTextCursor cursor = editor.textCursor();
+        cursor.setPosition(5); // inside "code"
+        editor.setTextCursor(cursor);
+        editor.toggleFencedCodeBlock();
+        QCOMPARE(editor.toPlainText(), QStringLiteral("code\n"));
+    }
+    // Bare cursor on either fence unwraps too.
+    {
+        MarkdownEditor editor;
+        editor.setPlainText(QStringLiteral("```\ncode\n```"));
+        QTextCursor cursor = editor.textCursor();
+        cursor.setPosition(0);
+        editor.setTextCursor(cursor);
+        editor.toggleFencedCodeBlock();
+        QCOMPARE(editor.toPlainText(), QStringLiteral("code\n"));
+    }
+    // Bare cursor outside any fence wraps the line (unchanged behavior).
+    {
+        MarkdownEditor editor;
+        editor.setPlainText(QStringLiteral("plain"));
+        QTextCursor cursor = editor.textCursor();
+        cursor.movePosition(QTextCursor::End);
+        editor.setTextCursor(cursor);
+        editor.toggleFencedCodeBlock();
+        QCOMPARE(editor.toPlainText(), QStringLiteral("```\nplain\n```"));
+    }
+}
+
+void TestCore::dropUrlsAreRejectedByEditor()
+{
+    TestableEditor editor;
+    QMimeData urls;
+    urls.setUrls({ QUrl::fromLocalFile(QStringLiteral("/tmp/test.md")) });
+    QVERIFY(!editor.testCanInsert(&urls));
+    QMimeData text;
+    text.setText(QStringLiteral("hello"));
+    QVERIFY(editor.testCanInsert(&text));
+}
+
+void TestCore::imagePastePrefersText()
+{
+    // Clipboard with both text and image (office/browsers) pastes text.
+    TestableEditor editor;
+    QSignalSpy spy(&editor, &MarkdownEditor::imagePasted);
+    QImage image(10, 10, QImage::Format_ARGB32);
+    image.fill(Qt::red);
+    QMimeData both;
+    both.setImageData(image);
+    both.setText(QStringLiteral("pasted table"));
+    editor.testInsert(&both);
+    QCOMPARE(editor.toPlainText(), QStringLiteral("pasted table"));
+    QCOMPARE(spy.count(), 0);
+
+    // Image-only clipboard still emits for embedding.
+    TestableEditor imageOnly;
+    QSignalSpy spy2(&imageOnly, &MarkdownEditor::imagePasted);
+    QMimeData mime;
+    mime.setImageData(image);
+    imageOnly.testInsert(&mime);
+    QCOMPARE(spy2.count(), 1);
+}
+
+void TestCore::replaceAllClosesEditBlock()
+{
+    // Clean recovery dir: a stale snapshot would prompt modally in the
+    // MainWindow constructor and block headless runs.
+    QStandardPaths::setTestModeEnabled(true);
+    QDir(QStandardPaths::writableLocation(QStandardPaths::AppLocalDataLocation))
+        .removeRecursively();
+    MainWindow window;
+    auto *editor = window.findChild<MarkdownEditor *>();
+    QVERIFY(editor != nullptr);
+    editor->setPlainText(QStringLiteral("a a a"));
+    QMetaObject::invokeMethod(&window, "replaceAll", Q_ARG(QString, QStringLiteral("a")),
+                              Q_ARG(QString, QStringLiteral("b")), Q_ARG(bool, false));
+    QCOMPARE(editor->toPlainText(), QStringLiteral("b b b"));
+    // A later edit must be its own undo step: the replace block was closed.
+    editor->insertPlainText(QStringLiteral("!"));
+    editor->document()->undo();
+    QCOMPARE(editor->toPlainText(), QStringLiteral("b b b"));
+}
+
+void TestCore::spellToggleRehighlights()
+{
+    SpellChecker checker;
+    if (!checker.available()) {
+        QSKIP("Sonnet not available in this build");
+    }
+    checker.setEnabled(true);
+
+    MarkdownHighlighter highlighter(nullptr);
+    highlighter.setSpellChecker(&checker);
+    QTextDocument doc;
+    doc.setPlainText(QStringLiteral("helllo world"));
+    highlighter.setDocument(&doc);
+    QTest::qWait(50);
+    QCOMPARE(spellUnderlineCount(doc.firstBlock()), 1);
+
+    // Disabling rehighlights through the stateChanged connection: no
+    // manual rehighlight() call here.
+    checker.setEnabled(false);
+    QTest::qWait(50);
+    QCOMPARE(spellUnderlineCount(doc.firstBlock()), 0);
+}
+
+void TestCore::lineEndingRoundTrip()
+{
+    QCOMPARE(MainWindow::detectLineEnding(QByteArray("a\r\nb")), QStringLiteral("\r\n"));
+    QCOMPARE(MainWindow::detectLineEnding(QByteArray("a\nb")), QStringLiteral("\n"));
+    QCOMPARE(MainWindow::detectLineEnding(QByteArray()), QStringLiteral("\n"));
+    QCOMPARE(MainWindow::encodeWithLineEnding(QStringLiteral("a\nb"), QStringLiteral("\r\n")),
+             QByteArray("a\r\nb"));
+    QCOMPARE(MainWindow::encodeWithLineEnding(QStringLiteral("a\nb"), QStringLiteral("\n")),
+             QByteArray("a\nb"));
+}
+
+void TestCore::recoverySkipsCleanDocument()
+{
+    QStandardPaths::setTestModeEnabled(true);
+    const QString dir =
+        QStandardPaths::writableLocation(QStandardPaths::AppLocalDataLocation);
+    QDir(dir).removeRecursively();
+    MainWindow window;
+    // Fresh window: nothing modified, so no snapshot is written.
+    QMetaObject::invokeMethod(&window, "writeRecoveryFile");
+    const auto snapshots = [&] {
+        return QDir(dir).entryList({ QStringLiteral("recovery-*.json") }, QDir::Files);
+    };
+    QCOMPARE(snapshots().size(), 0);
+    auto *editor = window.findChild<MarkdownEditor *>();
+    QVERIFY(editor != nullptr);
+    // A real user edit (setPlainText does not touch the modified flag).
+    editor->insertPlainText(QStringLiteral("unsaved work"));
+    QMetaObject::invokeMethod(&window, "writeRecoveryFile");
+    QCOMPARE(snapshots().size(), 1);
+    QDir(dir).removeRecursively();
+}
+
+void TestCore::loadRecoveryMarksModified()
+{
+    QStandardPaths::setTestModeEnabled(true);
+    const QString dir =
+        QStandardPaths::writableLocation(QStandardPaths::AppLocalDataLocation);
+    QDir(dir).removeRecursively(); // no stale prompt that would block headless
+    QDir().mkpath(dir);
+    MainWindow window; // constructed clean: no prompt below can block
+    const QString path = dir + QStringLiteral("/recovery-99999.json");
+    QJsonObject root;
+    root.insert(QStringLiteral("content"), QStringLiteral("restored"));
+    root.insert(QStringLiteral("path"), QStringLiteral(""));
+    QFile fixture(path);
+    QVERIFY(fixture.open(QIODevice::WriteOnly));
+    fixture.write(QJsonDocument(root).toJson(QJsonDocument::Compact));
+    fixture.close();
+
+    bool ok = false;
+    QMetaObject::invokeMethod(&window, "loadRecoveryFile", Q_RETURN_ARG(bool, ok),
+                              Q_ARG(QString, path));
+    QVERIFY(ok);
+    auto *editor = window.findChild<MarkdownEditor *>();
+    QVERIFY(editor != nullptr);
+    QCOMPARE(editor->toPlainText(), QStringLiteral("restored"));
+    // Restored work counts as unsaved: closing must prompt, not discard.
+    QVERIFY(editor->document()->isModified());
+    QFile::remove(path);
+}
+
+void TestCore::previewScrollFollowsRatio()
+{
+    // Programmatic setScrollRatio must move the viewport, not just the
+    // scrollbar: valueChanged is what drives QAbstractScrollArea.
+    MarkdownPreview preview;
+    preview.show();
+    preview.resize(400, 300);
+    QTextDocument source;
+    QStringList lines;
+    for (int i = 0; i < 200; ++i)
+        lines << QStringLiteral("line %1").arg(i);
+    source.setPlainText(lines.join(QStringLiteral("\n\n"))); // hard breaks: 200 blocks
+    preview.setSourceDocument(&source);
+    preview.renderNow();
+    QVERIFY(preview.verticalScrollBar()->maximum() > 0);
+
+    const int topBlock = preview.cursorForPosition(QPoint(5, 5)).blockNumber();
+    QVERIFY(topBlock < 5);
+    preview.setScrollRatio(1.0);
+    QTest::qWait(50);
+    const int bottomBlock = preview.cursorForPosition(QPoint(5, 5)).blockNumber();
+    QVERIFY(bottomBlock > 150);
+}
+
+void TestCore::previewLinkClickKeepsDocument()
+{
+    // anchorClicked fires regardless of openLinks (Qt docs); with internal
+    // navigation off, a failed target can no longer blank the preview.
+    // file:// keeps the test side-effect free (no browser launch).
+    MarkdownPreview preview;
+    preview.show();
+    preview.resize(400, 300);
+    QTextDocument source;
+    source.setPlainText(QStringLiteral("[click me](file:///tmp/nonexistent.md)"));
+    preview.setSourceDocument(&source);
+    preview.renderNow();
+    const QString before = preview.document()->toPlainText();
+
+    QMetaObject::invokeMethod(&preview, "openAllowedLink",
+                              Q_ARG(QUrl, QUrl(QStringLiteral("file:///tmp/nonexistent.md"))));
+    QTest::qWait(50);
+    QCOMPARE(preview.document()->toPlainText(), before);
+
+    // Same-document anchors scroll instead of navigating.
+    QString html = QStringLiteral("<p>%1</p><p><a name=\"sec\">target</a></p>")
+                       .arg(QStringLiteral("<br/>").repeated(200));
+    preview.document()->setHtml(html);
+    QVERIFY(preview.verticalScrollBar()->maximum() > 0);
+    QMetaObject::invokeMethod(&preview, "openAllowedLink",
+                              Q_ARG(QUrl, QUrl(QStringLiteral("#sec"))));
+    QVERIFY(preview.verticalScrollBar()->value() > 0);
+}
+
+void TestCore::findBarHiddenAtStartup()
+{
+    QWidget parent;
+    FindReplaceBar bar(&parent);
+    parent.show();
+    QVERIFY(bar.isHidden());
 }
 
 void TestCore::previewRendersDocumentSource()

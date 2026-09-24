@@ -128,7 +128,12 @@ jobs:
 
       - name: Run Windows tests
         # test_core forces QT_QPA_PLATFORM=offscreen itself.
+        # QT_QPA_FONTDIR: the offscreen platform has no fontconfig; without
+        # real fonts, text lays out degenerately and geometry tests
+        # (scroll sync, anchors) are meaningless.
         shell: cmd
+        env:
+          QT_QPA_FONTDIR: 'C:/Windows/Fonts'
         run: ctest --preset debug
 
       - name: Build Windows offline installer
