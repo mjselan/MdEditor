@@ -93,7 +93,10 @@ gh release upload v1.0.0 \
 
 The universal build avoids requiring Rosetta 2 on Apple Silicon. Its Qt
 runtime is bundled by `macdeployqt6`; users only need a compatible macOS
-version (macOS 13.0 or newer for this preset).
+version (macOS 13.0 or newer for this preset). The macOS CI job keeps its
+Actions artifact for 90 days, which is useful for recent-run debugging but
+is not permanent storage. GitHub Actions artifacts cannot be retained
+forever; the GitHub Release asset is the permanent distribution copy.
 
 ## Linux: what `linuxdeploy.sh` stages
 

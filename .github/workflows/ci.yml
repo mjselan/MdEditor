@@ -92,9 +92,11 @@ jobs:
           ./Installer/MacOS/make-installer.sh
 
       - name: Upload macOS DMG artifact
-        uses: actions/upload-artifact@v4
+        # v7 runs on Node.js 24 and avoids the deprecated Node.js 20 runtime.
+        # CI artifacts are temporary; the permanent copy is the Release asset.
+        uses: actions/upload-artifact@v7
         with:
           name: MarkdownEditor-macos-universal
           path: Installer/MacOS/MarkdownEditor-*.dmg
           if-no-files-found: error
-          retention-days: 14
+          retention-days: 90
