@@ -1,0 +1,444 @@
+The reason LaTeX display isn't working in MdEditor is that MarkdownPreview::renderNow() in src/markdownpreview.cpp directly passes raw text to document()->setMarkdown(m_pendingMarkdown). Qt's CommonMark parser does not recognize LaTeX math delimiters ($...$ or $$...$$), rendering them as literal source text.
+Furthermore, characters like _ in subscripts (e.g. $h_{FE}$, $R_e$) get mistakenly parsed by Markdown as italic delimiters, and the spell checker flags LaTeX commands (\Omega, \approx, \text) as spelling mistakes.
+Here is the complete, self-contained fix across src/markdownpreview.cpp and src/markdownhighlighter.cpp.
+1. src/markdownpreview.cpp
+Update src/markdownpreview.cpp to preprocess math before Markdown parsing and render formulas cleanly to HTML (Ω, β, <sub>, <sup>, operators, etc.):
+code
+C++
+// SPDX-License-Identifier: GPL-3.0-or-later
+#include "markdownpreview.h"
+
+#include <QDesktopServices>
+#include <QDir>
+#include <QImage>
+#include <QRegularExpression>
+#include <QScrollBar>
+#include <QUrl>
+#include <QVariant>
+
+namespace {
+
+bool isLikelyMath(const QString &expr)
+{
+    // Avoid mistaking ordinary currency (e.g. "$10 to $20") for math.
+    // Math expressions contain backslashes, sub/superscripts, operators, or single variables.
+    if (expr.contains(QLatin1Char('\\')) || expr.contains(QLatin1Char('_'))
+        || expr.contains(QLatin1Char('^'))) {
+        return true;
+    }
+    if (expr.contains(QLatin1Char('=')) || expr.contains(QLatin1Char('+'))
+        || expr.contains(QLatin1Char('-')) || expr.contains(QLatin1Char('/'))
+        || expr.contains(QLatin1Char('*')) || expr.contains(QLatin1Char('<'))
+        || expr.contains(QLatin1Char('>'))) {
+        return true;
+    }
+    const QString trimmed = expr.trimmed();
+    return trimmed.size() == 1 && trimmed.at(0).isLetter();
+}
+
+QString formatLatexFormula(const QString &latex, bool isDisplayBlock)
+{
+    QString expr = latex.trimmed();
+
+    // 1. Fractions: \frac{a}{b} -> (a / b)
+    static const QRegularExpression fracRegex(R"(\\frac\{([^}]+)\}\{([^}]+)\})");
+    expr.replace(fracRegex, QStringLiteral("(\\1 / \\2)"));
+
+    // 2. Square roots: \sqrt{x} -> √(x), \sqrt[n]{x} -> ⁿ√(x)
+    static const QRegularExpression sqrtNRegex(R"(\\sqrt\[([^\]]+)\]\{([^}]+)\})");
+    expr.replace(sqrtNRegex, QStringLiteral("<sup>\\1</sup>√(\\2)"));
+    static const QRegularExpression sqrtRegex(R"(\\sqrt\{([^}]+)\})");
+    expr.replace(sqrtRegex, QStringLiteral("√(\\1)"));
+
+    // 3. Text wrappers: \text{...}, \mathrm{...}, \operatorname{...}
+    static const QRegularExpression textRegex(R"(\\(?:text|mathrm|operatorname)\{([^}]+)\})");
+    expr.replace(textRegex, QStringLiteral("<span style='font-style:normal;'>\\1</span>"));
+
+    // 4. Style wrappers: \mathbf{...}, \mathit{...}
+    static const QRegularExpression bRegex(R"(\\mathbf\{([^}]+)\})");
+    expr.replace(bRegex, QStringLiteral("<b>\\1</b>"));
+    static const QRegularExpression iRegex(R"(\\mathit\{([^}]+)\})");
+    expr.replace(iRegex, QStringLiteral("<i>\\1</i>"));
+
+    // 5. Delimiters: \left(, \right), etc.
+    expr.replace(QLatin1String("\\left("), QStringLiteral("("));
+    expr.replace(QLatin1String("\\right)"), QStringLiteral(")"));
+    expr.replace(QLatin1String("\\left["), QStringLiteral("["));
+    expr.replace(QLatin1String("\\right]"), QStringLiteral("]"));
+    expr.replace(QLatin1String("\\left\\{"), QStringLiteral("{"));
+    expr.replace(QLatin1String("\\right\\}"), QStringLiteral("}"));
+    expr.replace(QLatin1String("\\left|"), QStringLiteral("|"));
+    expr.replace(QLatin1String("\\right|"), QStringLiteral("|"));
+
+    // 6. Spacing commands and commas before units (e.g. "4.7,\Omega" -> "4.7 \Omega")
+    expr.replace(QRegularExpression(R"(\\,|\\;|\\!|\\quad|\\qquad)"), QStringLiteral(" "));
+    expr.replace(QRegularExpression(R"(,(\\[a-zA-Z]))"), QStringLiteral(" \\1"));
+
+    // 7. Greek letters
+    static const QList<QPair<QString, QString>> greek = {
+        { QStringLiteral("\\Omega"), QStringLiteral("Ω") },
+        { QStringLiteral("\\omega"), QStringLiteral("ω") },
+        { QStringLiteral("\\beta"), QStringLiteral("β") },
+        { QStringLiteral("\\alpha"), QStringLiteral("α") },
+        { QStringLiteral("\\gamma"), QStringLiteral("γ") },
+        { QStringLiteral("\\Gamma"), QStringLiteral("Γ") },
+        { QStringLiteral("\\delta"), QStringLiteral("δ") },
+        { QStringLiteral("\\Delta"), QStringLiteral("Δ") },
+        { QStringLiteral("\\epsilon"), QStringLiteral("ε") },
+        { QStringLiteral("\\theta"), QStringLiteral("θ") },
+        { QStringLiteral("\\Theta"), QStringLiteral("Θ") },
+        { QStringLiteral("\\lambda"), QStringLiteral("λ") },
+        { QStringLiteral("\\Lambda"), QStringLiteral("Λ") },
+        { QStringLiteral("\\mu"), QStringLiteral("µ") },
+        { QStringLiteral("\\pi"), QStringLiteral("π") },
+        { QStringLiteral("\\Pi"), QStringLiteral("Π") },
+        { QStringLiteral("\\sigma"), QStringLiteral("σ") },
+        { QStringLiteral("\\Sigma"), QStringLiteral("Σ") },
+        { QStringLiteral("\\tau"), QStringLiteral("τ") },
+        { QStringLiteral("\\phi"), QStringLiteral("φ") },
+        { QStringLiteral("\\Phi"), QStringLiteral("Φ") },
+        { QStringLiteral("\\psi"), QStringLiteral("ψ") },
+        { QStringLiteral("\\Psi"), QStringLiteral("Ψ") },
+        { QStringLiteral("\\eta"), QStringLiteral("η") },
+        { QStringLiteral("\\zeta"), QStringLiteral("ζ") },
+        { QStringLiteral("\\rho"), QStringLiteral("ρ") }
+    };
+    for (const auto &pair : greek)
+        expr.replace(pair.first, pair.second);
+
+    // 8. Mathematical operators and relations
+    static const QList<QPair<QString, QString>> symbols = {
+        { QStringLiteral("\\approx"), QStringLiteral("≈") },
+        { QStringLiteral("\\sim"), QStringLiteral("∼") },
+        { QStringLiteral("\\propto"), QStringLiteral("∝") },
+        { QStringLiteral("\\pm"), QStringLiteral("±") },
+        { QStringLiteral("\\mp"), QStringLiteral("∓") },
+        { QStringLiteral("\\times"), QStringLiteral("×") },
+        { QStringLiteral("\\cdot"), QStringLiteral("·") },
+        { QStringLiteral("\\div"), QStringLiteral("÷") },
+        { QStringLiteral("\\le"), QStringLiteral("≤") },
+        { QStringLiteral("\\leq"), QStringLiteral("≤") },
+        { QStringLiteral("\\ge"), QStringLiteral("≥") },
+        { QStringLiteral("\\geq"), QStringLiteral("≥") },
+        { QStringLiteral("\\neq"), QStringLiteral("≠") },
+        { QStringLiteral("\\ne"), QStringLiteral("≠") },
+        { QStringLiteral("\\equiv"), QStringLiteral("≡") },
+        { QStringLiteral("\\infty"), QStringLiteral("∞") },
+        { QStringLiteral("\\partial"), QStringLiteral("∂") },
+        { QStringLiteral("\\nabla"), QStringLiteral("∇") },
+        { QStringLiteral("\\sum"), QStringLiteral("∑") },
+        { QStringLiteral("\\prod"), QStringLiteral("∏") },
+        { QStringLiteral("\\int"), QStringLiteral("∫") },
+        { QStringLiteral("\\degree"), QStringLiteral("°") },
+        { QStringLiteral("\\circ"), QStringLiteral("°") },
+        { QStringLiteral("\\to"), QStringLiteral("→") },
+        { QStringLiteral("\\rightarrow"), QStringLiteral("→") },
+        { QStringLiteral("\\leftarrow"), QStringLiteral("←") },
+        { QStringLiteral("\\Rightarrow"), QStringLiteral("⇒") },
+        { QStringLiteral("\\Leftarrow"), QStringLiteral("⇐") },
+        { QStringLiteral("\\leftrightarrow"), QStringLiteral("↔") },
+        { QStringLiteral("\\in"), QStringLiteral("∈") },
+        { QStringLiteral("\\notin"), QStringLiteral("∉") }
+    };
+    for (const auto &pair : symbols)
+        expr.replace(pair.first, pair.second);
+
+    // 9. Subscripts: A_{OL} -> A<sub>OL</sub>, h_FE -> h<sub>FE</sub>, R_e -> R<sub>e</sub>
+    static const QRegularExpression subBrace(R"(_\{([^}]+)\})");
+    expr.replace(subBrace, QStringLiteral("<sub>\\1</sub>"));
+    static const QRegularExpression subSingle(R"(_([a-zA-Z0-9]+))");
+    expr.replace(subSingle, QStringLiteral("<sub>\\1</sub>"));
+
+    // 10. Superscripts: x^{2} -> x<sup>2</sup>, x^3 -> x<sup>3</sup>
+    static const QRegularExpression supBrace(R"(\^\{([^}]+)\})");
+    expr.replace(supBrace, QStringLiteral("<sup>\\1</sup>"));
+    static const QRegularExpression supSingle(R"(\^([a-zA-Z0-9]+))");
+    expr.replace(supSingle, QStringLiteral("<sup>\\1</sup>"));
+
+    // 11. Clean up stray braces
+    expr.replace(QLatin1Char('{'), QString());
+    expr.replace(QLatin1Char('}'), QString());
+
+    if (isDisplayBlock) {
+        return QStringLiteral("<p align=\"center\" style=\"margin: 10px 0; font-size: 105%;\">%1</p>")
+            .arg(expr);
+    }
+    return QStringLiteral("<span>%1</span>").arg(expr);
+}
+
+QString extractRanges(QString text, const QRegularExpression &re, QStringList &extracted,
+                      const QString &tagPrefix)
+{
+    QString result;
+    int lastIndex = 0;
+    auto it = re.globalMatch(text);
+    while (it.hasNext()) {
+        auto match = it.next();
+        result.append(text.sliced(lastIndex, match.capturedStart() - lastIndex));
+        QString tag = QStringLiteral("MATHPH%1X%2X").arg(tagPrefix).arg(extracted.size());
+        extracted.append(match.captured(0));
+        result.append(tag);
+        lastIndex = match.capturedEnd();
+    }
+    result.append(text.sliced(lastIndex));
+    return result;
+}
+
+QString renderMarkdownWithMath(const QString &rawMarkdown)
+{
+    QString text = rawMarkdown;
+
+    // 1. Temporarily mask code blocks so equations or $ variables in code are not touched
+    static const QRegularExpression codeFence(
+        QStringLiteral(R"((?:^|\n)[ \t]*(?:```|~~~)[^\n]*\n[\s\S]*?\n[ \t]*(?:```|~~~))"));
+    static const QRegularExpression inlineCode(QStringLiteral(R"(`+[^`\n]+`+)"));
+
+    QStringList codeBlocks;
+    QStringList inlineCodes;
+    text = extractRanges(text, codeFence, codeBlocks, QStringLiteral("FENCE"));
+    text = extractRanges(text, inlineCode, inlineCodes, QStringLiteral("CODE"));
+
+    // 2. Extract display math ($$...$$) and inline math ($...$)
+    static const QRegularExpression displayMath(QStringLiteral(R"(\${2}([\s\S]+?)\${2})"));
+    static const QRegularExpression inlineMath(QStringLiteral(R"(\$([^\$\n]+?)\$)"));
+
+    QStringList displayFormulas;
+    QStringList inlineFormulas;
+
+    // Display math
+    QString textAfterDisplay;
+    int lastIdx = 0;
+    auto itDisp = displayMath.globalMatch(text);
+    while (itDisp.hasNext()) {
+        auto m = itDisp.next();
+        textAfterDisplay.append(text.sliced(lastIdx, m.capturedStart() - lastIdx));
+        QString tag = QStringLiteral("MATHPHDISPX%1X").arg(displayFormulas.size());
+        displayFormulas.append(formatLatexFormula(m.captured(1), true));
+        textAfterDisplay.append(QStringLiteral("\n\n") + tag + QStringLiteral("\n\n"));
+        lastIdx = m.capturedEnd();
+    }
+    textAfterDisplay.append(text.sliced(lastIdx));
+    text = textAfterDisplay;
+
+    // Inline math
+    QString textAfterInline;
+    lastIdx = 0;
+    auto itInline = inlineMath.globalMatch(text);
+    while (itInline.hasNext()) {
+        auto m = itInline.next();
+        textAfterInline.append(text.sliced(lastIdx, m.capturedStart() - lastIdx));
+        QString inner = m.captured(1);
+        if (isLikelyMath(inner)) {
+            QString tag = QStringLiteral("MATHPHINLINEX%1X").arg(inlineFormulas.size());
+            inlineFormulas.append(formatLatexFormula(inner, false));
+            textAfterInline.append(tag);
+        } else {
+            textAfterInline.append(m.captured(0)); // keep raw currency
+        }
+        lastIdx = m.capturedEnd();
+    }
+    textAfterInline.append(text.sliced(lastIdx));
+    text = textAfterInline;
+
+    // 3. Restore code segments before running the CommonMark converter
+    for (int i = 0; i < inlineCodes.size(); ++i) {
+        text.replace(QStringLiteral("MATHPHCODEX%1X").arg(i), inlineCodes.at(i));
+    }
+    for (int i = 0; i < codeBlocks.size(); ++i) {
+        text.replace(QStringLiteral("MATHPHFENCEX%1X").arg(i), codeBlocks.at(i));
+    }
+
+    // 4. Render markdown to structured HTML
+    QTextDocument temp;
+    temp.setMarkdown(text);
+    QString html = temp.toHtml();
+
+    // 5. Replace placeholders with the rendered math HTML
+    for (int i = 0; i < displayFormulas.size(); ++i) {
+        html.replace(QStringLiteral("MATHPHDISPX%1X").arg(i), displayFormulas.at(i));
+    }
+    for (int i = 0; i < inlineFormulas.size(); ++i) {
+        html.replace(QStringLiteral("MATHPHINLINEX%1X").arg(i), inlineFormulas.at(i));
+    }
+
+    return html;
+}
+
+} // namespace
+
+MarkdownPreview::MarkdownPreview(QWidget *parent)
+    : QTextBrowser(parent)
+{
+    setOpenExternalLinks(false);
+    setOpenLinks(false);
+    connect(this, &QTextBrowser::anchorClicked,
+            this, &MarkdownPreview::openAllowedLink);
+    setFrameShape(QTextBrowser::NoFrame);
+
+    m_debounce.setSingleShot(true);
+    m_debounce.setInterval(250);
+    connect(&m_debounce, &QTimer::timeout, this, &MarkdownPreview::renderNow);
+
+    connect(verticalScrollBar(), &QAbstractSlider::valueChanged, this, [this](int value) {
+        const int max = verticalScrollBar()->maximum();
+        const double ratio = max > 0 ? double(value) / double(max) : 0.0;
+        m_lastRatio = ratio;
+        emit scrollRatioChanged(ratio);
+    });
+}
+
+void MarkdownPreview::setSourceDocument(QTextDocument *document)
+{
+    m_sourceDocument = document;
+}
+
+void MarkdownPreview::scheduleRender()
+{
+    if (m_debounce.isActive())
+        return;
+    m_debounce.start();
+}
+
+void MarkdownPreview::setDocumentDirectory(const QString &dir)
+{
+    m_documentDir = dir;
+}
+
+void MarkdownPreview::renderNow()
+{
+    m_debounce.stop();
+    if (m_sourceDocument)
+        m_pendingMarkdown = m_sourceDocument->toPlainText();
+
+    // Render markdown and LaTeX formulas into HTML
+    const QString html = renderMarkdownWithMath(m_pendingMarkdown);
+    document()->setHtml(html);
+
+    emit documentRendered();
+    setScrollRatio(m_lastRatio);
+}
+
+void MarkdownPreview::setScrollRatio(double ratio)
+{
+    verticalScrollBar()->setValue(qRound(ratio * double(verticalScrollBar()->maximum())));
+}
+
+void MarkdownPreview::resetScroll()
+{
+    m_lastRatio = 0.0;
+    setScrollRatio(0.0);
+}
+
+QVariant MarkdownPreview::loadResource(int type, const QUrl &name)
+{
+    if (type == QTextDocument::ImageResource && name.isRelative() && !m_documentDir.isEmpty()) {
+        const QString path = m_documentDir + QLatin1Char('/')
+                             + name.toString(QUrl::FullyDecoded);
+        const QImage image(path);
+        if (!image.isNull()) {
+            document()->addResource(QTextDocument::ImageResource, name, image);
+            return image;
+        }
+    }
+    return QTextBrowser::loadResource(type, name);
+}
+
+void MarkdownPreview::openAllowedLink(const QUrl &url)
+{
+    if (url.hasFragment() && url.scheme().isEmpty() && url.path().isEmpty()
+        && url.host().isEmpty() && url.query().isEmpty()) {
+        scrollToAnchor(url.fragment());
+        return;
+    }
+    const QString scheme = url.scheme().toLower();
+    if (scheme == QLatin1String("http") || scheme == QLatin1String("https")
+        || scheme == QLatin1String("mailto")) {
+        QDesktopServices::openUrl(url);
+    }
+}
+2. src/markdownhighlighter.cpp
+In the editor, LaTeX equations should not have red spell-check error underlines, and underscores inside equations (like $h_{FE}$) must not trigger italics across the sentence.
+Apply these edits in src/markdownhighlighter.cpp:
+Add the inlineMathSpans helper right after inlineCodeSpans:
+code
+C++
+QVector<QPair<int, int>> inlineMathSpans(const QString &text)
+{
+    static const QRegularExpression math(QStringLiteral(R"(\${1,2}[^\$\n]+\${1,2})"));
+    QVector<QPair<int, int>> spans;
+    auto it = math.globalMatch(text);
+    while (it.hasNext()) {
+        const auto m = it.next();
+        spans.append({ m.capturedStart(), m.capturedLength() });
+    }
+    return spans;
+}
+Update highlightInline to style math and mask it from emphasis rules:
+code
+C++
+void MarkdownHighlighter::highlightInline(const QString &text)
+{
+    const auto codeSpans = inlineCodeSpans(text);
+    const auto mathSpans = inlineMathSpans(text);
+
+    for (const auto &span : codeSpans)
+        setFormat(span.first, span.second, m_formats.value(QStringLiteral("code")));
+    for (const auto &span : mathSpans)
+        setFormat(span.first, span.second, m_formats.value(QStringLiteral("code")));
+
+    QVector<QPair<int, int>> allSpans = codeSpans;
+    allSpans.append(mathSpans);
+    const QString masked = maskCodeSpans(text, allSpans);
+
+    const auto apply = [&](const QRegularExpression &re, const QString &format) {
+        auto it = re.globalMatch(masked);
+        while (it.hasNext()) {
+            const auto m = it.next();
+            int g = 1;
+            while (g <= m.lastCapturedIndex() && m.captured(g).isEmpty())
+                ++g;
+            if (g > m.lastCapturedIndex())
+                continue;
+            setFormat(m.capturedStart(g), m.capturedLength(g), m_formats.value(format));
+        }
+    };
+
+    apply(d->bold, QStringLiteral("bold"));
+    apply(d->italic, QStringLiteral("italic"));
+    apply(d->strike, QStringLiteral("strikethrough"));
+
+    auto linkIt = d->link.globalMatch(masked);
+    while (linkIt.hasNext()) {
+        const auto m = linkIt.next();
+        setFormat(m.capturedStart(0), m.capturedLength(0), m_formats.value(QStringLiteral("link")));
+    }
+}
+Exclude math spans from codeSegments so spell check ignores equations:
+code
+C++
+QVector<QPair<int, int>> MarkdownHighlighter::codeSegments(const QString &text)
+{
+    QVector<QPair<int, int>> spans;
+    if (isOpenFence(text))
+        spans.append({ 0, text.size() });
+    spans.append(inlineCodeSpans(text));
+    spans.append(inlineMathSpans(text)); // Exclude LaTeX formulas from spell check
+
+    auto it = linkPattern().globalMatch(text);
+    while (it.hasNext()) {
+        const auto m = it.next();
+        if (!m.captured(2).isEmpty())
+            spans.append({ m.capturedStart(2), m.capturedLength(2) });
+        else if (!m.captured(3).isEmpty())
+            spans.append({ m.capturedStart(3), m.capturedLength(3) });
+    }
+    return spans;
+}
+What this accomplishes
+$4.7,\Omega$ displays as 4.7 Ω
+$\beta$ displays as β
+$h_{FE}$ displays as hFE
+$A_\text{OL}$ displays as AOL
+$R_e \approx 0.22,\Omega\text{ to }0.33,\Omega$ displays as Re ≈ 0.22 Ω to 0.33 Ω
+$$\frac{V}{R} = I$$ renders as a centered display equation
+Export HTML and Export PDF / Print in MainWindow automatically export the rendered mathematical typography.

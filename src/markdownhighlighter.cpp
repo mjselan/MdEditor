@@ -66,6 +66,37 @@ QVector<QPair<int, int>> inlineCodeSpans(const QString &text)
     return spans;
 }
 
+// Single-line math candidates ($...$ or $$...$$) guarded by isLikelyMath so
+// currency ("$10 to $20") is not styled as math. Multi-line $$ blocks are
+// out of scope for the per-block highlighter (see preview for full handling).
+bool isLikelyMath(const QString &expr)
+{
+    if (expr.contains(QLatin1Char('\\')) || expr.contains(QLatin1Char('_'))
+        || expr.contains(QLatin1Char('^')))
+        return true;
+    if (expr.contains(QLatin1Char('=')) || expr.contains(QLatin1Char('+'))
+        || expr.contains(QLatin1Char('-')) || expr.contains(QLatin1Char('/'))
+        || expr.contains(QLatin1Char('*')) || expr.contains(QLatin1Char('<'))
+        || expr.contains(QLatin1Char('>')))
+        return true;
+    const QString trimmed = expr.trimmed();
+    return trimmed.size() == 1 && trimmed.at(0).isLetter();
+}
+
+QVector<QPair<int, int>> inlineMathSpans(const QString &text)
+{
+    static const QRegularExpression math(QStringLiteral(R"(\${1,2}([^\$\n]+?)\${1,2})"));
+    QVector<QPair<int, int>> spans;
+    auto it = math.globalMatch(text);
+    while (it.hasNext()) {
+        const auto m = it.next();
+        if (!isLikelyMath(m.captured(1)))
+            continue; // currency or plain $...$ text
+        spans.append({ m.capturedStart(), m.capturedLength() });
+    }
+    return spans;
+}
+
 QTextCharFormat makeFormat(const QColor &color, bool bold = false, bool italic = false,
                            bool strike = false, bool underline = false)
 {
@@ -236,11 +267,16 @@ void MarkdownHighlighter::highlightList(const QString &text)
 void MarkdownHighlighter::highlightInline(const QString &text)
 {
     const auto codeSpans = inlineCodeSpans(text);
+    const auto mathSpans = inlineMathSpans(text);
 
     for (const auto &span : codeSpans)
         setFormat(span.first, span.second, m_formats.value(QStringLiteral("code")));
+    for (const auto &span : mathSpans)
+        setFormat(span.first, span.second, m_formats.value(QStringLiteral("code")));
 
-    const QString masked = maskCodeSpans(text, codeSpans);
+    QVector<QPair<int, int>> allSpans = codeSpans;
+    allSpans.append(mathSpans);
+    const QString masked = maskCodeSpans(text, allSpans);
 
     // Emphasis rules operate on the masked text; capture offsets are identical
     // to the original because masking preserves length. For alternatives, the
@@ -275,6 +311,7 @@ QVector<QPair<int, int>> MarkdownHighlighter::codeSegments(const QString &text)
     if (isOpenFence(text))
         spans.append({ 0, text.size() });
     spans.append(inlineCodeSpans(text));
+    spans.append(inlineMathSpans(text)); // LaTeX is never spell checked
     // Link targets and autolinks are never spell checked (only the visible
     // link text is). The pattern is shared with the visual link rule below.
     auto it = linkPattern().globalMatch(text);

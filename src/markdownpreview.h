@@ -28,7 +28,9 @@ public:
     void setDocumentDirectory(const QString &dir);
 
 public slots:
-    // Programmatic scroll (from editor sync); does not emit scrollRatioChanged.
+    // Programmatic scroll (from editor sync). Travels through the scrollbar,
+    // so scrollRatioChanged fires; echo loops are cut by the owner's reentry
+    // guard (see MainWindow::onEditorScrolled).
     void setScrollRatio(double ratio);
 
     // Forget the remembered scroll position and jump to the top (e.g. when
@@ -58,4 +60,7 @@ private:
     QPointer<QTextDocument> m_sourceDocument;
     QString m_documentDir;
     double m_lastRatio = 0.0;
+    // True while renderNow() replaces the document content: scrollbar
+    // valueChanged signals in that window are reset noise, not user scrolls.
+    bool m_inRender = false;
 };
