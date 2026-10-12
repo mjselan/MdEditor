@@ -3,6 +3,20 @@
 All notable changes to Markdown Editor are documented here. The format is
 loosely based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
+## [1.0.4] - 2026-10-12
+
+### Added
+- Math-aware preview rendering for `$...$` and `$$...$$` formulas: LaTeX
+  snippets (Greek letters, common operators, `\frac`, `\sqrt`,
+  sub/superscripts) are converted to Unicode/HTML before Markdown parsing.
+  Currency (`$10 to $20`) and code spans are left untouched.
+
+### Fixed
+- Editor underscores inside math (`$h_{FE}$`) no longer trigger italics,
+  and LaTeX commands are excluded from spell checking.
+- Preview no longer jumps back to the top on re-render while scrolled;
+  the scroll position is preserved across renders.
+
 ## [1.0.3] - 2026-09-24
 
 ### Fixed

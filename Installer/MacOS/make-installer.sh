@@ -118,6 +118,15 @@ if [[ -z "$VERSION" ]]; then
 fi
 [[ -n "$VERSION" ]] || VERSION="1.0.0"
 
+# config.xml / package.xml <Version> tags follow CMakeLists.txt (single
+# source of truth); refresh them before packaging (used by the --ifw format).
+if command -v cmake >/dev/null 2>&1; then
+    cmake -P "$REPO_ROOT/Installer/sync-versions.cmake" || \
+        die "installer version sync failed"
+else
+    info "WARNING: 'cmake' not found; skipping installer version sync."
+fi
+
 APP_PATH=""
 for candidate in "$DATA_DIR"/*.app; do
     if [[ -d "$candidate" ]]; then

@@ -6,9 +6,11 @@ name: Release
 #
 # Each job builds its installer with the tag version in the filename
 # (MARKDOWNEDITOR_VERSION), so the asset matches the release even when
-# CMakeLists.txt still carries the previous version. Keep the IFW
-# config.xml / package.xml versions in sync when bumping a release
-# (see Installer/README.md).
+# CMakeLists.txt still carries the previous version. The IFW
+# config.xml / package.xml <Version> tags are synced from CMakeLists.txt
+# automatically by each make-installer script
+# (Installer/sync-versions.cmake); a version bump only edits CMakeLists.txt
+# (plus CHANGELOG.md).
 on:
   push:
     tags:

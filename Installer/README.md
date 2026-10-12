@@ -11,8 +11,12 @@ Installer sources are separated by target platform:
   Linux IFW configuration, package metadata, and generated payload.
 
 Each platform has its own `packages/.../data` directory, so staging one
-platform does not overwrite the other platform's payload. Keep the
-`config.xml` and `package.xml` versions synchronized when bumping a release.
+platform does not overwrite the other platform's payload. Version bumps only
+edit `CMakeLists.txt`: each `make-installer` script refreshes the
+`config.xml` and `package.xml` `<Version>` tags from it automatically via
+`cmake -P Installer/sync-versions.cmake` (a version change also re-stamps
+the `package.xml` `<ReleaseDate>` tags with the current date). Run that
+command by hand if you need the tree in sync without building an installer.
 Run these commands from the repository root:
 
 ```text

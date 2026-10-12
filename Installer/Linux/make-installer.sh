@@ -46,6 +46,15 @@ if [[ -z "$VERSION" ]]; then
 fi
 [[ -n "$VERSION" ]] || VERSION="1.0.0"
 
+# config.xml / package.xml <Version> tags follow CMakeLists.txt (single
+# source of truth); refresh them before invoking binarycreator.
+if command -v cmake >/dev/null 2>&1; then
+    cmake -P "$REPO_ROOT/Installer/sync-versions.cmake" || \
+        die "installer version sync failed"
+else
+    info "WARNING: 'cmake' not found; skipping installer version sync."
+fi
+
 APP_BIN="$DATA_DIR/markdowneditor.bin"
 APP_LAUNCHER="$DATA_DIR/markdowneditor"
 [[ -x "$APP_BIN" ]] || \

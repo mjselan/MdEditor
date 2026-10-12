@@ -32,6 +32,13 @@ jobs:
         # via the Qt6_DIR environment set by install-qt-action.
         run: cmake --preset debug
 
+      - name: Check installer versions in sync
+        # CMakeLists.txt is the single source of truth; the sync script is
+        # idempotent, so this only fails when committed metadata drifted.
+        run: |
+          cmake -P Installer/sync-versions.cmake
+          git diff --exit-code -- Installer || (echo "::error::Installer metadata out of sync with CMakeLists.txt; run cmake -P Installer/sync-versions.cmake and commit the result" && exit 1)
+
       - name: Build debug preset
         run: cmake --build --preset debug
 

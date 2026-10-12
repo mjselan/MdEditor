@@ -44,6 +44,16 @@ if "%VERSION%"=="" (
 )
 set "OUT=%REPO_ROOT%\Installer\Windows\MarkdownEditor-%VERSION%-offline.exe"
 
+rem IFW metadata follows CMakeLists.txt (single source of truth): refresh the
+rem config.xml / package.xml <Version> tags before invoking binarycreator.
+where cmake >nul 2>nul
+if errorlevel 1 (
+    echo WARNING: cmake not found on PATH - skipping installer version sync.
+) else (
+    call cmake -P "%REPO_ROOT%\Installer\sync-versions.cmake"
+    if errorlevel 1 goto :fail
+)
+
 if not exist "%PKG_DIR%\com.mdeditor.markdowneditor\data\markdowneditor.exe" (
     echo ERROR: staged data directory is empty or missing markdowneditor.exe.
     echo        Run first:  tools\windows\devcmd.bat Installer\Windows\windeploy.bat
