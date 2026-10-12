@@ -42,15 +42,32 @@ as a CI artifact for 90 days; the permanent copy is the asset on the GitHub
 Release.
 
 Pushing a version tag builds all three platform installers and attaches them
-to the matching release automatically (`.github/workflows/release.yml`):
+to the matching release automatically (`.github/workflows/release.yml`).
+The full release procedure is: bump `VERSION` in `CMakeLists.txt`, add a
+`CHANGELOG.md` entry, commit, then tag and push:
 
 ```bash
-git tag v1.0.1 && git push origin v1.0.1
+git tag v1.0.5 && git push origin v1.0.5
 ```
 
-The installer filename carries the tag version (`MARKDOWNEDITOR_VERSION`),
-so it matches the release even when `CMakeLists.txt` still has the previous
-version. To re-attach or replace a Windows asset manually:
+The installer filename carries the tag version (`MARKDOWNEDITOR_VERSION`,
+falling back to `CMakeLists.txt` when unset). The IFW `config.xml` /
+`package.xml` `<Version>` and `<ReleaseDate>` tags are synced from
+`CMakeLists.txt` automatically by each `make-installer` script
+(`Installer/sync-versions.cmake`), so the version bump never touches the
+`Installer/` tree by hand.
+
+Deleting a GitHub Release does not delete its tag. To rebuild the assets
+for a deleted release, delete and re-push the tag (this re-runs the whole
+release workflow) or cut a new version:
+
+```bash
+git push --delete origin v1.0.4 && git push origin v1.0.4
+```
+
+Note a re-pushed tag rebuilds the code as tagged; commits made since the
+tag need a new version tag to ship. To re-attach or replace a Windows
+asset manually:
 
 ```powershell
 gh release upload v1.0.1 `
