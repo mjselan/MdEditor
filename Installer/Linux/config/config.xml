@@ -4,8 +4,10 @@
     <Version>1.0.5</Version>
     <Title>Markdown Editor Installer</Title>
     <Publisher>MdEditor</Publisher>
+    <StyleSheet>style.qss</StyleSheet>
     <TargetDir>@HomeDir@/MarkdownEditor</TargetDir>
     <MaintenanceToolName>maintenancetool</MaintenanceToolName>
     <AllowNonAsciiCharacters>true</AllowNonAsciiCharacters>
     <AllowSpaceInPath>true</AllowSpaceInPath>
+    <ControlScript>controlscript.qs</ControlScript>
 </Installer>

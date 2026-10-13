@@ -5,7 +5,9 @@
     <Title>Markdown Editor Installer</Title>
     <Publisher>MdEditor</Publisher>
     <WizardStyle>Mac</WizardStyle>
+    <StyleSheet>style.qss</StyleSheet>
     <TargetDir>@ApplicationsDir@/MarkdownEditor</TargetDir>
     <AllowNonAsciiCharacters>true</AllowNonAsciiCharacters>
     <AllowSpaceInPath>true</AllowSpaceInPath>
+    <ControlScript>controlscript.qs</ControlScript>
 </Installer>
