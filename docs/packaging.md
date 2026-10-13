@@ -10,6 +10,25 @@ payload directories, so staging one platform never overwrites another's.
 Each installer presents the GPL-3.0 license (from the package `meta/`
 directory) for acceptance during setup.
 
+## Installer wizard styling and overwrite protection
+
+All three Qt Installer Framework wizards share two `config/` files (kept
+as identical copies per platform, canonical source
+`Installer/Windows/config/`):
+
+- `style.qss` — explicit widget colors so wizard text stays readable under
+  OS dark themes (fixes white-on-white labels and buttons).
+- `controlscript.qs` — on the target-directory page, detects an existing
+  installation via its `maintenancetool` (`maintenancetool.exe` on Windows,
+  `maintenancetool.app/...` on macOS, `maintenancetool` on Linux) and asks
+  before overwriting; answering Yes purges the old install (`purge -c`),
+  answering No re-arms the directory-in-use protection. The script already
+  branches on `systemInfo.productType`, so the same file runs everywhere.
+
+Wired per platform via `<StyleSheet>` / `<ControlScript>` in that
+platform's `config/config.xml`. The native macOS DMG has no IFW wizard, so
+it is unaffected (only `--ifw` builds use these files).
+
 ## Windows: what `windeploy.bat` stages
 
 Into `Installer\Windows\packages\com.mdeditor.markdowneditor\data` (gitignored):
@@ -22,6 +41,8 @@ Into `Installer\Windows\packages\com.mdeditor.markdowneditor\data` (gitignored):
 | `data\hunspell\en_US.{dic,aff}` | `build\prefix` dictionaries |
 
 The layout matches Sonnet's runtime search paths (`<exeDir>/kf6/sonnet` for client plugins, `<exeDir>/data/hunspell` for dictionaries), so the installed app needs no environment variables. No `vc_redist` bootstrapper is needed — the CRT DLLs (`vcruntime140.dll`, `vcruntime140_1.dll`, `msvcp140.dll`) are bundled next to the exe.
+
+The package `installscript.qs` registers `.md` and `.markdown` file associations (`RegisterFileType` under a shared `com.mdeditor.markdowneditor.md` ProgId), so double-click and "Open With" launch the app. The operation reverses automatically on uninstall and on controller-script purge.
 
 ### Windows CI and releases
 
@@ -81,7 +102,11 @@ gh release upload v1.0.1 `
 1. Configures and builds the `release` CMake preset.
 2. Stages the `MarkdownEditor.app` bundle in
    `Installer/MacOS/packages/com.mdeditor.markdowneditor/data/`.
-3. Runs `macdeployqt6` to copy the Qt frameworks, plugins, and platform
+3. Registers Markdown document types in the staged `Info.plist` (exports
+   the `net.daringfireball.markdown` UTI for `.md`/`.markdown`/`.mdown`
+   and claims it with the Editor role at Alternate rank), so Finder
+   double-click and "Open With" reach the app via `QEvent::FileOpen`.
+4. Runs `macdeployqt6` to copy the Qt frameworks, plugins, and platform
    dependencies into the bundle. The resulting app is self-contained and
    does not require a Qt installation on the target Mac. The Windows-only
    `build/prefix` Sonnet layout is not reused on macOS; use a matching native
@@ -166,6 +191,12 @@ System libraries (`/lib`, `/usr/lib`: xcb, fontconfig, Mesa/GL, `libssl3`)
 are intentionally *not* bundled — Ubuntu 24.04 provides them (see the `apt`
 line in the README). System hunspell dictionaries (`/usr/share/hunspell`,
 package `hunspell-en-us`) are used when no staged dictionaries exist.
+
+File association comes from the package `installscript.qs`, which writes a
+`~/.local/share/applications/markdowneditor.desktop` entry declaring
+`MimeType=text/markdown;text/x-markdown;text/plain;` with `%F` file
+arguments — double-click and "Open With" in GNOME/KDE reach the app, and
+uninstall removes the entry transactionally with the files.
 
 ## Linux troubleshooting
 

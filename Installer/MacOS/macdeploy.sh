@@ -6,7 +6,9 @@
 #   1. configure and build the Release CMake preset;
 #   2. turn the executable into a real .app bundle (see CMakeLists.txt);
 #   3. copy the bundle into the Qt Installer Framework package data directory;
-#   4. run Qt's macdeployqt to add Qt frameworks, plugins, and translations.
+#   4. register Markdown document types in the staged Info.plist (Finder
+#      double-click / "Open With" routing via QEvent::FileOpen);
+#   5. run Qt's macdeployqt to add Qt frameworks, plugins, and translations.
 #
 # Usage:
 #   QT_DIR=/path/to/Qt/6.x/macos ./Installer/MacOS/macdeploy.sh
@@ -155,7 +157,7 @@ CMAKE="$(find_cmake || true)"
 MACDEPLOYQT="$(find_macdeployqt || true)"
 [[ -n "$MACDEPLOYQT" ]] || die "macdeployqt6 was not found under QT_DIR/bin or on PATH"
 
-info "[1/4] Building the $PRESET preset..."
+info "[1/5] Building the $PRESET preset..."
 "$CMAKE" --preset "$PRESET"
 "$CMAKE" --build --preset "$PRESET" --target markdowneditor
 
@@ -171,16 +173,54 @@ SOURCE_EXECUTABLE="$(app_executable "$SOURCE_APP" || true)"
 [[ -n "$SOURCE_EXECUTABLE" ]] || \
     die "app bundle is missing its Contents/MacOS executable: $SOURCE_APP"
 
-info "[2/4] Cleaning the Installer Framework package data directory..."
+info "[2/5] Cleaning the Installer Framework package data directory..."
 rm -rf "$DATA_DIR"
 mkdir -p "$DATA_DIR"
 
-info "[3/4] Copying the application bundle..."
+info "[3/5] Copying the application bundle..."
 STAGED_APP="$DATA_DIR/$(basename -- "$SOURCE_APP")"
 ditto "$SOURCE_APP" "$STAGED_APP"
 [[ -d "$STAGED_APP" ]] || die "failed to stage $STAGED_APP"
 
-info "[4/4] Deploying Qt frameworks and plugins with $MACDEPLOYQT..."
+info "[4/5] Registering Markdown document types..."
+# Finder routes double-clicked / "Open With" .md files to the app via
+# QEvent::FileOpen (see src/main.cpp), but only when the bundle declares
+# them. Export the de-facto Markdown UTI and claim it with the Editor role
+# (Alternate rank: appear in "Open With" without stealing the default from
+# the user's current editor). Runs before macdeployqt so an optional
+# -codesign signs the final Info.plist. Downstream plutil -lint in
+# make-installer.sh validates the result.
+[[ -x /usr/libexec/PlistBuddy ]] || die "PlistBuddy not found at /usr/libexec/PlistBuddy"
+PLIST="$STAGED_APP/Contents/Info.plist"
+[[ -f "$PLIST" ]] || die "staged app has no Contents/Info.plist: $STAGED_APP"
+/usr/libexec/PlistBuddy -c "Delete :UTExportedTypeDeclarations" "$PLIST" >/dev/null 2>&1 || true
+/usr/libexec/PlistBuddy -c "Delete :CFBundleDocumentTypes" "$PLIST" >/dev/null 2>&1 || true
+/usr/libexec/PlistBuddy -c "Add :UTExportedTypeDeclarations array" "$PLIST"
+/usr/libexec/PlistBuddy -c "Add :UTExportedTypeDeclarations:0 dict" "$PLIST"
+/usr/libexec/PlistBuddy -c "Add :UTExportedTypeDeclarations:0:UTTypeIdentifier string net.daringfireball.markdown" "$PLIST"
+/usr/libexec/PlistBuddy -c "Add :UTExportedTypeDeclarations:0:UTTypeDescription string Markdown Document" "$PLIST"
+/usr/libexec/PlistBuddy -c "Add :UTExportedTypeDeclarations:0:UTTypeConformsTo array" "$PLIST"
+/usr/libexec/PlistBuddy -c "Add :UTExportedTypeDeclarations:0:UTTypeConformsTo:0 string public.plain-text" "$PLIST"
+/usr/libexec/PlistBuddy -c "Add :UTExportedTypeDeclarations:0:UTTypeTagSpecification dict" "$PLIST"
+/usr/libexec/PlistBuddy -c "Add :UTExportedTypeDeclarations:0:UTTypeTagSpecification:public.filename-extension array" "$PLIST"
+/usr/libexec/PlistBuddy -c "Add :UTExportedTypeDeclarations:0:UTTypeTagSpecification:public.filename-extension:0 string md" "$PLIST"
+/usr/libexec/PlistBuddy -c "Add :UTExportedTypeDeclarations:0:UTTypeTagSpecification:public.filename-extension:1 string markdown" "$PLIST"
+/usr/libexec/PlistBuddy -c "Add :UTExportedTypeDeclarations:0:UTTypeTagSpecification:public.filename-extension:2 string mdown" "$PLIST"
+/usr/libexec/PlistBuddy -c "Add :UTExportedTypeDeclarations:0:UTTypeTagSpecification:public.mime-type array" "$PLIST"
+/usr/libexec/PlistBuddy -c "Add :UTExportedTypeDeclarations:0:UTTypeTagSpecification:public.mime-type:0 string text/markdown" "$PLIST"
+/usr/libexec/PlistBuddy -c "Add :CFBundleDocumentTypes array" "$PLIST"
+/usr/libexec/PlistBuddy -c "Add :CFBundleDocumentTypes:0 dict" "$PLIST"
+/usr/libexec/PlistBuddy -c "Add :CFBundleDocumentTypes:0:CFBundleTypeName string Markdown Document" "$PLIST"
+/usr/libexec/PlistBuddy -c "Add :CFBundleDocumentTypes:0:CFBundleTypeRole string Editor" "$PLIST"
+/usr/libexec/PlistBuddy -c "Add :CFBundleDocumentTypes:0:LSHandlerRank string Alternate" "$PLIST"
+/usr/libexec/PlistBuddy -c "Add :CFBundleDocumentTypes:0:LSItemContentTypes array" "$PLIST"
+/usr/libexec/PlistBuddy -c "Add :CFBundleDocumentTypes:0:LSItemContentTypes:0 string net.daringfireball.markdown" "$PLIST"
+/usr/libexec/PlistBuddy -c "Add :CFBundleDocumentTypes:0:CFBundleTypeExtensions array" "$PLIST"
+/usr/libexec/PlistBuddy -c "Add :CFBundleDocumentTypes:0:CFBundleTypeExtensions:0 string md" "$PLIST"
+/usr/libexec/PlistBuddy -c "Add :CFBundleDocumentTypes:0:CFBundleTypeExtensions:1 string markdown" "$PLIST"
+/usr/libexec/PlistBuddy -c "Add :CFBundleDocumentTypes:0:CFBundleTypeExtensions:2 string mdown" "$PLIST"
+
+info "[5/5] Deploying Qt frameworks and plugins with $MACDEPLOYQT..."
 DEPLOY_OPTIONS=(-always-overwrite)
 if [[ -n "${CODESIGN_IDENTITY:-}" ]]; then
     # macdeployqt accepts the identity in the form -codesign=<identity>.

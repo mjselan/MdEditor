@@ -3,6 +3,25 @@
 All notable changes to Markdown Editor are documented here. The format is
 loosely based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
+## [1.0.6] - 2026-10-13
+
+### Added
+- Installer overwrite protection: the wizard detects an existing
+  installation in the target folder, asks before overwriting, and purges
+  it on approval (all three installers; a shared stylesheet also fixes
+  dark-theme wizard text).
+- File associations for `.md` / `.markdown` (double-click, "Open With"):
+  registered at install on Windows, via the desktop entry on Linux, and
+  via bundle document types routed to `QEvent::FileOpen` on macOS.
+
+## [1.0.5] - 2026-10-12
+
+### Changed
+- Installer `config.xml` / `package.xml` versions and release dates now
+  sync automatically from `CMakeLists.txt`
+  (`Installer/sync-versions.cmake`, enforced in CI). No application
+  changes.
+
 ## [1.0.4] - 2026-10-12
 
 ### Added

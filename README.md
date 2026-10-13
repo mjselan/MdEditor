@@ -16,8 +16,9 @@ and no network access required. Licensed GPL-3.0-or-later.
 - **Syntax highlighting**: headings, bold, italic, strikethrough, inline code, fenced code blocks (block-state tracked), blockquotes, lists, links — block-based rehighlighting keeps 10k+ line documents responsive
 - **Formatting commands**: Bold (`Ctrl+B`), Italic (`Ctrl+I`), strikethrough, headings 1–3 / normal (`Ctrl+1..3`, `Ctrl+0`), link (`Ctrl+K`), inline code, fenced code block, blockquote, bulleted & numbered lists
 - **Editor conveniences**: line-number gutter, current-line highlight, list continuation on Enter, Tab/Shift-Tab indent of list/quote lines
-- **Preview**: Qt's built-in CommonMark + GFM renderer (tables, task lists, strikethrough, fenced code) in a `QTextBrowser`; external links open in the system browser; synchronized scrolling between panes
+- **Preview**: Qt's built-in CommonMark + GFM renderer (tables, task lists, strikethrough, fenced code) in a `QTextBrowser`; inline `$...$` and display `$$...$$` math renders as Unicode with sub/superscripts; external links open in the system browser; synchronized scrolling between panes
 - **File management**: New / Open / Save / Save As, Recent Files, drag-and-drop `.md` opening, unsaved-changes indicator (`*` in title) with save prompt on close
+- **File associations**: double-click and "Open With" open `.md` / `.markdown` files (registered by the installers on Windows, Linux, and macOS)
 - **Autosave**: recovery snapshot every 30 s while the document has unsaved changes, under `QStandardPaths::AppLocalDataLocation` (one file per process); restore prompt on next launch after a crash; removed on clean exit
 - **Find & Replace** (`Ctrl+F` / `Ctrl+H`) with match-case and wrap-around
 - **Status bar**: word / character / line counts
