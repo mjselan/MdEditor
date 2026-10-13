@@ -14,8 +14,7 @@ Component.prototype.createOperations = function()
     if (systemInfo.productType === "windows") {
         var appExe = "@TargetDir@/markdowneditor.exe";
 
-        // Application shortcut inside the Start Menu group from config.xml
-        // (<StartMenuDir>Markdown Editor</StartMenuDir>).
+        // Application shortcut in Start Menu
         component.addOperation("CreateShortcut",
             appExe,
             "@StartMenuDir@/Markdown Editor.lnk",
@@ -23,7 +22,7 @@ Component.prototype.createOperations = function()
             "iconId=0",
             "workingDirectory=@TargetDir@");
 
-        // Maintenance tool shortcut (modify / repair / uninstall).
+        // Maintenance tool shortcut
         var maint = "@TargetDir@/maintenancetool.exe";
         component.addOperation("CreateShortcut",
             maint,
@@ -32,12 +31,30 @@ Component.prototype.createOperations = function()
             "iconId=0",
             "workingDirectory=@TargetDir@");
 
-        // Optional per-user desktop shortcut - uncomment to enable.
-        // component.addOperation("CreateShortcut",
-        //     appExe,
-        //     "@DesktopDir@/Markdown Editor.lnk",
-        //     "iconPath=" + appExe,
-        //     "iconId=0",
-        //     "workingDirectory=@TargetDir@");
+        // -------------------------------------------------------------
+        // Register file associations for "Open with..."
+        // -------------------------------------------------------------
+        // Command format: "path/to/markdowneditor.exe" "%1"
+        var command = "\"" + appExe + "\" \"%1\"";
+
+        // Register .md files
+        component.addOperation("RegisterFileType",
+            "md",                                     // extension (without dot)
+            command,                                  // launch command
+            "Markdown Document",                      // description
+            "text/markdown",                          // MIME / content type
+            appExe + ",0",                            // icon (icon 0 from your exe)
+            "ProgId=com.mdeditor.markdowneditor.md"  // explicit ProgId
+        );
+
+        // Optional: Also register .markdown files
+        component.addOperation("RegisterFileType",
+            "markdown",
+            command,
+            "Markdown Document",
+            "text/markdown",
+            appExe + ",0",
+            "ProgId=com.mdeditor.markdowneditor.md"
+        );
     }
 }
