@@ -2,8 +2,8 @@
 <Package>
     <DisplayName>Markdown Editor</DisplayName>
     <Description>Markdown Editor macOS application bundle and bundled Qt runtime. Optional spell-check data is included when available.</Description>
-    <Version>1.0.5</Version>
-    <ReleaseDate>2026-10-12</ReleaseDate>
+    <Version>1.0.6</Version>
+    <ReleaseDate>2026-10-13</ReleaseDate>
     <Licenses>
         <License name="GNU General Public License v3 (Markdown Editor)" file="gpl-3.0.txt" />
     </Licenses>
