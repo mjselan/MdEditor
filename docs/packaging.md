@@ -3,6 +3,9 @@
 This page holds the implementation details behind the installer flows
 summarized in the [README](../README.md). Build the installers with the
 commands there; come here to understand (or debug) what gets staged.
+For the reusable, cross-platform rules behind these scripts (versioning,
+tag-driven releases, payload staging, upgrade behavior), see
+[packagingGeneral.md](packagingGeneral.md).
 
 All three platforms use **Qt Installer Framework 4.11** with the same
 component id (`com.mdeditor.markdowneditor`) and separate `packages/.../data`
